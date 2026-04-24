@@ -294,6 +294,108 @@ sudo journalctl -u invoice-frontend -f
 - 后端：`0.0.0.0:8000`
 - 前端预览：`0.0.0.0:4173`（如使用 `npm run dev`，通常为 `5173`）
 
+### 10.1 部署教程（从 0 到可访问）
+
+以下步骤适合一台 Linux 服务器，目标目录为 `/www/wwwroot/invoice-system`。
+
+1. 拉取代码
+
+```bash
+cd /www/wwwroot
+git clone <你的仓库地址> invoice-system
+cd /www/wwwroot/invoice-system
+```
+
+2. 初始化后端环境
+
+```bash
+cd /www/wwwroot/invoice-system/backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+编辑 `backend/.env`，至少配置以下关键项：
+
+- `LLM_API_KEY`：你的模型密钥（必填）
+- `LLM_API_BASE`：模型服务地址（默认 DeepSeek）
+- `LLM_MODEL`：模型名（如 `deepseek-chat`）
+
+3. 初始化前端环境
+
+```bash
+cd /www/wwwroot/invoice-system/frontend
+npm install
+cp .env.example .env
+```
+
+如需改后端地址，编辑 `frontend/.env` 的：
+
+- `VITE_API_BASE`
+- `VITE_API_ORIGIN`
+
+4. 先做一次手工启动验证（建议）
+
+```bash
+# 终端 A：后端
+cd /www/wwwroot/invoice-system/backend
+source .venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+```bash
+# 终端 B：前端
+cd /www/wwwroot/invoice-system/frontend
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+浏览器访问：
+
+- 前端：`http://<服务器IP>:5173`
+- 健康检查：`http://<服务器IP>:8000/health`
+
+5. 切到 systemd 常驻部署
+
+```bash
+sudo cp /www/wwwroot/invoice-system/deploy/systemd/invoice-backend.service /etc/systemd/system/
+sudo cp /www/wwwroot/invoice-system/deploy/systemd/invoice-frontend.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now invoice-backend
+sudo systemctl enable --now invoice-frontend
+```
+
+6. 检查服务状态与日志
+
+```bash
+sudo systemctl status invoice-backend
+sudo systemctl status invoice-frontend
+sudo journalctl -u invoice-backend -f
+sudo journalctl -u invoice-frontend -f
+```
+
+7. 发布后更新流程（以后每次发版）
+
+```bash
+cd /www/wwwroot/invoice-system
+git pull
+
+cd /www/wwwroot/invoice-system/backend
+source .venv/bin/activate
+pip install -r requirements.txt
+
+cd /www/wwwroot/invoice-system/frontend
+npm install
+
+sudo systemctl restart invoice-backend
+sudo systemctl restart invoice-frontend
+```
+
+8. 回滚建议（可选）
+
+- 每次更新前先打 tag 或记录 commit id。
+- 出问题时切回上一个稳定 commit，再重启两个 systemd 服务。
+
 ## 11. 数据与文件说明
 
 - SQLite：`backend/invoice.db`

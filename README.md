@@ -79,6 +79,9 @@ invoice-system/
       ├─ invoice-backend.service
       └─ invoice-frontend.service
 ```
+└─ scripts/
+   └─ clean_test_data.sh
+
 
 ## 5. 核心业务流程
 
@@ -301,7 +304,41 @@ sudo journalctl -u invoice-frontend -f
 - `ss -ltnp | grep 8000`
 - `sudo journalctl -u invoice-backend -n 200`
 
-## 13. 安全与合规注意事项
+## 13. 测试数据一键清理
+
+适用场景：
+
+- 联调或验收后，需要清空测试产生的发票文件与数据库记录。
+
+脚本位置：
+
+- `scripts/clean_test_data.sh`
+
+执行方式：
+
+```bash
+cd /www/wwwroot/invoice-system
+./scripts/clean_test_data.sh
+```
+
+脚本行为（幂等，可重复执行）：
+
+- 清空 `backend/previews/` 下所有文件。
+- 清空 `backend/source_files/` 下所有文件。
+- 清空 `backend/archives/` 下所有文件。
+- 清空 `backend/meta/` 下所有文件。
+- 清空数据库 `backend/invoice.db` 的 `invoice_records` 表数据。
+
+注意事项：
+
+- 该脚本会删除所有已上传发票相关文件与记录，请勿在正式生产数据上误执行。
+- 建议执行前先备份数据库：
+
+```bash
+cp /www/wwwroot/invoice-system/backend/invoice.db /www/wwwroot/invoice-system/backend/invoice.db.bak.$(date +%F-%H%M%S)
+```
+
+## 14. 安全与合规注意事项
 
 当前状态（MVP）：
 
@@ -315,7 +352,7 @@ sudo journalctl -u invoice-frontend -f
 - 访问日志与操作审计日志。
 - 反向代理限流与上传大小限制。
 
-## 14. 接手开发建议（下一步优先级）
+## 15. 接手开发建议（下一步优先级）
 
 1. 稳定性：为上传链路添加统一异常处理与错误码映射。
 2. 精准去重：将去重键升级为复合条件（如 `发票号 + 税号`）。
@@ -323,7 +360,7 @@ sudo journalctl -u invoice-frontend -f
 4. 测试：补齐 `tests/`（上传、去重、详情、预览、异常分支）。
 5. 可维护性：引入 Alembic 管理数据库迁移，替代启动时手工补列。
 
-## 15. 快速接手清单（新同学）
+## 16. 快速接手清单（新同学）
 
 1. 阅读：`backend/app/api/routes/invoices.py`
 2. 阅读：`backend/app/services/invoice_service.py`
@@ -331,3 +368,4 @@ sudo journalctl -u invoice-frontend -f
 4. 启动本地前后端并上传一张样例 PDF 验证全链路。
 5. 确认 `source_files/archives/previews/meta` 四个目录有写权限。
 6. 执行 `npx tsc --noEmit` 与 `npm run build`，确保前端构建通过。
+7. 测试结束后执行 `./scripts/clean_test_data.sh` 清理测试数据。

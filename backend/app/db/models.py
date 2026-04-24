@@ -13,6 +13,7 @@ class InvoiceRecord(Base):
     source_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     archived_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     invoice_number: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    uploader_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     amount: Mapped[float | None] = mapped_column(Float, nullable=True)
     invoice_date: Mapped[str | None] = mapped_column(String(50), nullable=True)
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)

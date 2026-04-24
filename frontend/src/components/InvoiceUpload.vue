@@ -9,6 +9,7 @@ const emit = defineEmits<{ (e: "uploaded", payload: UploadInvoiceResponse): void
 const isDragging = ref(false);
 const loading = ref(false);
 const message = ref("拖拽 PDF 到这里，或点击选择文件");
+const uploaderName = ref("");
 
 function onDragOver() {
   isDragging.value = true;
@@ -19,6 +20,11 @@ function onDragLeave() {
 }
 
 async function handleFile(file: File) {
+  const trimmedName = uploaderName.value.trim();
+  if (!trimmedName) {
+    message.value = "请先填写上传人姓名";
+    return;
+  }
   // 仅允许 PDF，避免后端不必要的解析失败。
   if (!file || file.type !== "application/pdf") {
     message.value = "仅支持 PDF 文件";
@@ -27,15 +33,20 @@ async function handleFile(file: File) {
   loading.value = true;
   message.value = "正在上传并解析，请稍候...";
   try {
-    const result = await uploadInvoice(file);
+    const result = await uploadInvoice(file, trimmedName);
+    // 向后兼容：若后端尚未升级返回 uploader_name，则使用前端输入值兜底展示。
+    const normalizedResult: UploadInvoiceResponse = {
+      ...result,
+      uploader_name: result.uploader_name ?? trimmedName,
+    };
     // 覆盖旧发票时给出更强提示，避免员工误解为新建记录。
-    if (result?.replaced) {
+    if (normalizedResult.replaced) {
       message.value = "重复发票号：已覆盖旧文件并更新记录";
-      window.alert(result?.message ?? "检测到重复发票号，已覆盖旧文件并更新记录");
+      window.alert(normalizedResult.message ?? "检测到重复发票号，已覆盖旧文件并更新记录");
     } else {
-      message.value = result?.message ?? "上传成功，已完成解析";
+      message.value = normalizedResult.message ?? "上传成功，已完成解析";
     }
-    emit("uploaded", result);
+    emit("uploaded", normalizedResult);
   } catch (err) {
     message.value = "上传失败，请检查后端服务或 API Key 配置";
   } finally {
@@ -64,6 +75,18 @@ function onFileChange(e: Event) {
 
 <template>
   <section class="w-full max-w-4xl mx-auto">
+    <div class="mb-4 rounded-2xl border border-slate-200 bg-white p-4">
+      <label for="uploader_name" class="mb-2 block text-sm font-medium text-slate-700">上传人姓名（必填）</label>
+      <input
+        id="uploader_name"
+        v-model="uploaderName"
+        type="text"
+        maxlength="50"
+        placeholder="请输入姓名，例如：张三"
+        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+      />
+    </div>
+
     <label
       class="relative flex h-[360px] w-full cursor-pointer items-center justify-center rounded-3xl border-2 border-dashed transition"
       :class="isDragging ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300 bg-white'"

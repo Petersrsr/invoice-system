@@ -16,6 +16,7 @@ class InvoiceExtractedData(BaseModel):
 class InvoiceCreateResponse(BaseModel):
     id: int
     file_name: str
+    uploader_name: str | None = None
     replaced: bool = False
     message: str | None = None
     extracted: InvoiceExtractedData
@@ -24,6 +25,7 @@ class InvoiceCreateResponse(BaseModel):
 class InvoiceListItem(BaseModel):
     id: int
     file_name: str
+    uploader_name: str | None
     amount: float | None
     invoice_date: str | None
     seller_name: str | None
@@ -40,6 +42,7 @@ class InvoiceListItem(BaseModel):
 class InvoiceDetailResponse(BaseModel):
     id: int
     file_name: str
+    uploader_name: str | None
     amount: float | None
     invoice_date: str | None
     seller_name: str | None

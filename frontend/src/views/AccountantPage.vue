@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 import { fetchInvoiceDetail, fetchInvoices } from "../api/invoice";
 import InvoiceTable from "../components/InvoiceTable.vue";
@@ -10,6 +10,43 @@ const selected = ref<InvoiceDetail | null>(null);
 const detailOpen = ref(false);
 const detailLoading = ref(false);
 const apiBase = (import.meta.env.VITE_API_ORIGIN as string | undefined) ?? "http://127.0.0.1:8000";
+
+const totalAmount = computed(() =>
+  invoices.value.reduce((sum, row) => sum + (row.amount ?? 0), 0),
+);
+
+const purposeStats = computed(() => {
+  const bucket = new Map<string, number>();
+  for (const row of invoices.value) {
+    const key = row.purpose ?? "未分类";
+    bucket.set(key, (bucket.get(key) ?? 0) + 1);
+  }
+  return [...bucket.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+});
+
+const uploaderStats = computed(() => {
+  const bucket = new Map<string, number>();
+  for (const row of invoices.value) {
+    const key = row.uploader_name ?? "未填写";
+    bucket.set(key, (bucket.get(key) ?? 0) + (row.amount ?? 0));
+  }
+  return [...bucket.entries()]
+    .map(([name, amount]) => ({ name, amount }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 8);
+});
+
+function purposeBarWidth(count: number): string {
+  const max = purposeStats.value[0]?.count ?? 1;
+  return `${Math.max((count / max) * 100, 6)}%`;
+}
+
+function uploaderBarWidth(amount: number): string {
+  const max = uploaderStats.value[0]?.amount ?? 1;
+  return `${Math.max((amount / max) * 100, 6)}%`;
+}
 
 // 会计页初始化时拉取汇总列表。
 async function loadData() {
@@ -39,6 +76,57 @@ onMounted(loadData);
     <h2 class="mb-2 text-xl font-semibold text-slate-800">会计汇总管理</h2>
     <p class="text-sm text-slate-500">查看全部解析记录，支持查看源文件、归档文件与预览图。</p>
 
+    <div class="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <p class="text-xs text-slate-500">发票总数</p>
+        <p class="mt-1 text-2xl font-semibold text-slate-800">{{ invoices.length }}</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <p class="text-xs text-slate-500">金额汇总（元）</p>
+        <p class="mt-1 text-2xl font-semibold text-slate-800">{{ totalAmount.toFixed(2) }}</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <p class="text-xs text-slate-500">平均每张（元）</p>
+        <p class="mt-1 text-2xl font-semibold text-slate-800">
+          {{ invoices.length === 0 ? "0.00" : (totalAmount / invoices.length).toFixed(2) }}
+        </p>
+      </div>
+    </div>
+
+    <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div class="rounded-xl border border-slate-200 p-4">
+        <p class="text-sm font-medium text-slate-700">用途分布（按张数）</p>
+        <div v-if="purposeStats.length === 0" class="mt-3 text-xs text-slate-400">暂无数据</div>
+        <div v-else class="mt-3 space-y-2">
+          <div v-for="item in purposeStats" :key="item.name">
+            <div class="mb-1 flex items-center justify-between text-xs text-slate-600">
+              <span>{{ item.name }}</span>
+              <span>{{ item.count }} 张</span>
+            </div>
+            <div class="h-2 rounded bg-slate-100">
+              <div class="h-2 rounded bg-indigo-500" :style="{ width: purposeBarWidth(item.count) }"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 p-4">
+        <p class="text-sm font-medium text-slate-700">上传人金额排行（Top 8）</p>
+        <div v-if="uploaderStats.length === 0" class="mt-3 text-xs text-slate-400">暂无数据</div>
+        <div v-else class="mt-3 space-y-2">
+          <div v-for="item in uploaderStats" :key="item.name">
+            <div class="mb-1 flex items-center justify-between text-xs text-slate-600">
+              <span>{{ item.name }}</span>
+              <span>{{ item.amount.toFixed(2) }} 元</span>
+            </div>
+            <div class="h-2 rounded bg-slate-100">
+              <div class="h-2 rounded bg-emerald-500" :style="{ width: uploaderBarWidth(item.amount) }"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <InvoiceTable :data="invoices" @select="openDetail" />
 
     <div v-if="detailOpen" class="fixed inset-0 z-50 bg-black/30 p-4" @click.self="closeDetail">
@@ -52,6 +140,7 @@ onMounted(loadData);
           <p v-if="detailLoading" class="text-slate-500">加载中...</p>
           <div v-else-if="selected" class="space-y-4">
             <div class="grid grid-cols-2 gap-3 text-sm">
+              <p><span class="text-slate-500">上传人：</span>{{ selected.uploader_name ?? "-" }}</p>
               <p><span class="text-slate-500">文件名：</span>{{ selected.file_name }}</p>
               <p><span class="text-slate-500">销售方：</span>{{ selected.seller_name ?? "-" }}</p>
               <p><span class="text-slate-500">用途：</span>{{ selected.purpose ?? "-" }}</p>

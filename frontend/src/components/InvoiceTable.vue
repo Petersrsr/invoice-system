@@ -13,6 +13,7 @@ const emit = defineEmits<{ (e: "select", id: number): void }>();
       <table class="min-w-full text-sm">
         <thead class="bg-slate-100 text-slate-600">
           <tr>
+            <th class="px-4 py-3 text-left">上传人</th>
             <th class="px-4 py-3 text-left">文件名</th>
             <th class="px-4 py-3 text-left">销售方名称</th>
             <th class="px-4 py-3 text-left">用途</th>
@@ -29,6 +30,7 @@ const emit = defineEmits<{ (e: "select", id: number): void }>();
             class="border-t border-slate-100 cursor-pointer hover:bg-slate-50"
             @click="emit('select', row.id)"
           >
+            <td class="px-4 py-3">{{ row.uploader_name ?? "-" }}</td>
             <td class="px-4 py-3">{{ row.file_name }}</td>
             <td class="px-4 py-3">{{ row.seller_name ?? row.title ?? "-" }}</td>
             <td class="px-4 py-3">{{ row.purpose ?? row.item_name ?? "-" }}</td>
@@ -38,7 +40,7 @@ const emit = defineEmits<{ (e: "select", id: number): void }>();
             <td class="px-4 py-3">{{ row.tax_id ?? '-' }}</td>
           </tr>
           <tr v-if="data.length === 0">
-            <td class="px-4 py-6 text-center text-slate-400" colspan="7">暂无解析记录</td>
+            <td class="px-4 py-6 text-center text-slate-400" colspan="8">暂无解析记录</td>
           </tr>
         </tbody>
       </table>

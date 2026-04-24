@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -27,7 +27,15 @@ router = APIRouter()
 
 
 @router.post("/upload", response_model=InvoiceCreateResponse)
-async def upload_invoice(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_invoice(
+    file: UploadFile = File(...),
+    uploader_name: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    uploader_name = uploader_name.strip()
+    if not uploader_name:
+        raise HTTPException(status_code=400, detail="上传人姓名不能为空")
+
     # 仅允许 PDF，避免后续解析链路浪费资源。
     if file.content_type not in {"application/pdf", "application/x-pdf"}:
         raise HTTPException(status_code=400, detail="仅支持 PDF 文件")
@@ -59,6 +67,7 @@ async def upload_invoice(file: UploadFile = File(...), db: Session = Depends(get
             file_name=archive_name,
             source_file_name=source_name,
             archived_file_name=archive_name,
+            uploader_name=uploader_name,
             raw_text=raw_text,
             extracted=extracted,
         )
@@ -71,6 +80,7 @@ async def upload_invoice(file: UploadFile = File(...), db: Session = Depends(get
             file_name=archive_name,
             source_file_name=source_name,
             archived_file_name=archive_name,
+            uploader_name=uploader_name,
             raw_text=raw_text,
             extracted=extracted,
         )
@@ -94,6 +104,7 @@ async def upload_invoice(file: UploadFile = File(...), db: Session = Depends(get
     return InvoiceCreateResponse(
         id=record.id,
         file_name=record.file_name,
+        uploader_name=record.uploader_name,
         replaced=replaced,
         message="检测到重复发票号，已覆盖旧文件并更新记录" if replaced else "上传成功，已完成解析",
         extracted=InvoiceExtractedData(
@@ -117,6 +128,7 @@ def get_all_invoices(db: Session = Depends(get_db)):
         InvoiceListItem(
             id=r.id,
             file_name=r.file_name,
+            uploader_name=r.uploader_name,
             amount=r.amount,
             invoice_date=r.invoice_date,
             seller_name=r.title,
@@ -140,6 +152,7 @@ def get_invoice_detail(invoice_id: int, db: Session = Depends(get_db)):
     return InvoiceDetailResponse(
         id=target.id,
         file_name=target.file_name,
+        uploader_name=target.uploader_name,
         amount=target.amount,
         invoice_date=target.invoice_date,
         seller_name=target.title,

@@ -42,6 +42,7 @@ def save_invoice_with_files(
     file_name: str,
     source_file_name: str,
     archived_file_name: str,
+    uploader_name: str | None,
     raw_text: str,
     extracted: dict,
 ) -> InvoiceRecord:
@@ -49,6 +50,7 @@ def save_invoice_with_files(
         file_name=file_name,
         source_file_name=source_file_name,
         archived_file_name=archived_file_name,
+        uploader_name=uploader_name,
         invoice_number=extracted.get("invoice_number"),
         amount=_to_float(extracted.get("amount")),
         invoice_date=extracted.get("date"),
@@ -97,12 +99,14 @@ def update_invoice_with_files(
     file_name: str,
     source_file_name: str,
     archived_file_name: str,
+    uploader_name: str | None,
     raw_text: str,
     extracted: dict,
 ) -> InvoiceRecord:
     record.file_name = file_name
     record.source_file_name = source_file_name
     record.archived_file_name = archived_file_name
+    record.uploader_name = uploader_name
     record.invoice_number = extracted.get("invoice_number")
     record.amount = _to_float(extracted.get("amount"))
     record.invoice_date = extracted.get("date")

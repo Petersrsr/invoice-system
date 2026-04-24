@@ -15,6 +15,7 @@ _SQLITE_EXTRA_COLUMNS: dict[str, str] = {
     "source_file_name": "VARCHAR(255)",
     "archived_file_name": "VARCHAR(255)",
     "invoice_number": "VARCHAR(128)",
+    "uploader_name": "VARCHAR(128)",
 }
 
 

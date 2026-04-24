@@ -31,6 +31,7 @@ function closeConfirm() {
 
         <div class="mt-5 grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-4 text-sm">
           <p><span class="text-slate-500">记录 ID：</span>{{ latestUpload.id }}</p>
+          <p><span class="text-slate-500">上传人：</span>{{ latestUpload.uploader_name ?? "-" }}</p>
           <p><span class="text-slate-500">归档文件：</span>{{ latestUpload.file_name }}</p>
           <p><span class="text-slate-500">销售方：</span>{{ latestUpload.extracted.seller_name ?? "-" }}</p>
           <p><span class="text-slate-500">用途：</span>{{ latestUpload.extracted.purpose ?? "-" }}</p>

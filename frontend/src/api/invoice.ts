@@ -9,9 +9,10 @@ const http = axios.create({
 });
 
 // 上传发票 PDF，后端返回解析结果与是否覆盖信息。
-export async function uploadInvoice(file: File): Promise<UploadInvoiceResponse> {
+export async function uploadInvoice(file: File, uploaderName: string): Promise<UploadInvoiceResponse> {
   const form = new FormData();
   form.append("file", file);
+  form.append("uploader_name", uploaderName);
   const resp = await http.post("/invoices/upload", form, {
     headers: { "Content-Type": "multipart/form-data" },
   });

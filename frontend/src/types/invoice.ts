@@ -14,6 +14,7 @@ export interface InvoiceExtracted {
 export interface UploadInvoiceResponse {
   id: number;
   file_name: string;
+  uploader_name: string | null;
   replaced: boolean;
   message: string | null;
   extracted: InvoiceExtracted;
@@ -23,6 +24,7 @@ export interface UploadInvoiceResponse {
 export interface InvoiceRecord {
   id: number;
   file_name: string;
+  uploader_name: string | null;
   amount: number | null;
   invoice_date: string | null;
   seller_name: string | null;
@@ -38,6 +40,7 @@ export interface InvoiceRecord {
 export interface InvoiceDetail {
   id: number;
   file_name: string;
+  uploader_name: string | null;
   amount: number | null;
   invoice_date: string | null;
   seller_name: string | null;

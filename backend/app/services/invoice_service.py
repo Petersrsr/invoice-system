@@ -6,6 +6,18 @@ from sqlalchemy.orm import Session
 
 from app.db.models import InvoiceRecord
 
+PURPOSE_KEYWORDS: dict[str, list[str]] = {
+    "食品": ["餐", "食品", "饮料", "烘焙", "便利店", "外卖", "快餐", "零食", "咖啡", "面包", "牛奶"],
+    "交通": ["交通", "打车", "出租车", "地铁", "公交", "高铁", "机票", "火车", "出行", "过路", "停车"],
+    "住宿": ["酒店", "住宿", "旅馆", "宾馆", "民宿"],
+    "办公": ["办公", "文具", "打印", "耗材", "纸", "笔", "文件夹", "工位"],
+    "通信": ["通信", "电话", "宽带", "网络", "流量", "话费"],
+    "培训": ["培训", "课程", "学习", "讲座", "认证"],
+    "医疗": ["医疗", "医院", "药", "体检", "门诊"],
+    "服务": ["服务", "咨询", "维护", "维修", "代办", "手续费"],
+    "设备": ["设备", "电脑", "显示器", "硬盘", "鼠标", "键盘", "服务器"],
+}
+
 
 def save_invoice(db: Session, file_name: str, raw_text: str, extracted: dict) -> InvoiceRecord:
     record = InvoiceRecord(
@@ -38,6 +50,7 @@ def normalize_extracted_fields(raw_text: str, extracted: dict | None) -> dict:
     data["tax_id"] = data.get("tax_id") or _capture(raw_text, [r"税号[：:\s]*([A-Za-z0-9]{8,})"])
     data["date"] = data.get("date") or _capture(raw_text, [r"(\d{4}-\d{2}-\d{2})", r"(\d{4}/\d{2}/\d{2})"])
     data["amount"] = data.get("amount") or _capture(raw_text, [r"金额[：:\s¥￥]*([0-9]+(?:\.[0-9]{1,2})?)", r"价税合计[：:\s¥￥]*([0-9]+(?:\.[0-9]{1,2})?)"])
+    data["purpose"] = _normalize_purpose(data.get("purpose"), raw_text)
     return data
 
 
@@ -133,3 +146,15 @@ def _truncate_utf8(text: str, max_bytes: int) -> str:
 
 def _utf8_len(text: str) -> int:
     return len(text.encode("utf-8"))
+
+
+def _normalize_purpose(purpose: str | None, raw_text: str) -> str:
+    source = f"{purpose or ''} {raw_text}"
+    source = source.lower()
+    for category, keywords in PURPOSE_KEYWORDS.items():
+        for keyword in keywords:
+            if keyword.lower() in source:
+                return category
+    if purpose:
+        return "其他"
+    return "其他"

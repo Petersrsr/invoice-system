@@ -22,3 +22,16 @@ export interface InvoiceRecord {
   item_name: string | null;
   created_at: string;
 }
+
+export interface InvoiceDetail {
+  id: number;
+  file_name: string;
+  amount: number | null;
+  invoice_date: string | null;
+  seller_name: string | null;
+  purpose: string | null;
+  invoice_number: string | null;
+  tax_id: string | null;
+  raw_text: string | null;
+  created_at: string;
+}

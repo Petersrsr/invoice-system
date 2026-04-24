@@ -32,3 +32,16 @@ class InvoiceListItem(BaseModel):
     created_at: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InvoiceDetailResponse(BaseModel):
+    id: int
+    file_name: str
+    amount: float | None
+    invoice_date: str | None
+    seller_name: str | None
+    purpose: str | None
+    invoice_number: str | None
+    tax_id: str | None
+    raw_text: str | None
+    created_at: str

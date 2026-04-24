@@ -2,6 +2,7 @@
 import type { InvoiceRecord } from "../types/invoice";
 
 defineProps<{ data: InvoiceRecord[] }>();
+const emit = defineEmits<{ (e: "select", id: number): void }>();
 </script>
 
 <template>
@@ -21,7 +22,12 @@ defineProps<{ data: InvoiceRecord[] }>();
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in data" :key="row.id" class="border-t border-slate-100">
+          <tr
+            v-for="row in data"
+            :key="row.id"
+            class="border-t border-slate-100 cursor-pointer hover:bg-slate-50"
+            @click="emit('select', row.id)"
+          >
             <td class="px-4 py-3">{{ row.file_name }}</td>
             <td class="px-4 py-3">{{ row.seller_name ?? row.title ?? "-" }}</td>
             <td class="px-4 py-3">{{ row.purpose ?? row.item_name ?? "-" }}</td>

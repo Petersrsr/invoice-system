@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.core.config import settings
-from app.schemas.invoice import InvoiceCreateResponse, InvoiceExtractedData, InvoiceListItem
+from app.schemas.invoice import InvoiceCreateResponse, InvoiceDetailResponse, InvoiceExtractedData, InvoiceListItem
 from app.services.invoice_service import (
     archive_pdf,
     build_archive_filename,
@@ -69,3 +69,24 @@ def get_all_invoices(db: Session = Depends(get_db)):
         )
         for r in records
     ]
+
+
+@router.get("/{invoice_id}", response_model=InvoiceDetailResponse)
+def get_invoice_detail(invoice_id: int, db: Session = Depends(get_db)):
+    records = list_invoices(db)
+    target = next((r for r in records if r.id == invoice_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="发票记录不存在")
+
+    return InvoiceDetailResponse(
+        id=target.id,
+        file_name=target.file_name,
+        amount=target.amount,
+        invoice_date=target.invoice_date,
+        seller_name=target.title,
+        purpose=target.item_name,
+        invoice_number=extract_invoice_number_from_file_name(target.file_name),
+        tax_id=target.tax_id,
+        raw_text=target.raw_text,
+        created_at=target.created_at.isoformat() if hasattr(target.created_at, "isoformat") else str(target.created_at),
+    )

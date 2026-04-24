@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { InvoiceRecord } from "../types/invoice";
+import type { InvoiceDetail, InvoiceRecord } from "../types/invoice";
 
 const http = axios.create({
   baseURL: "http://127.0.0.1:8000/api",
@@ -16,5 +16,10 @@ export async function uploadInvoice(file: File) {
 
 export async function fetchInvoices(): Promise<InvoiceRecord[]> {
   const resp = await http.get("/invoices");
+  return resp.data;
+}
+
+export async function fetchInvoiceDetail(id: number): Promise<InvoiceDetail> {
+  const resp = await http.get(`/invoices/${id}`);
   return resp.data;
 }

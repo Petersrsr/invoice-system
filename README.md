@@ -58,5 +58,6 @@ npm run dev
 1. 用户上传 PDF 发票。
 2. FastAPI 使用 PyMuPDF 提取文本。
 3. 文本发送给 DeepSeek/Claude 兼容的 Chat Completions API。
-4. 返回结构化 JSON 并写入 SQLite。
-5. 会计页面展示全部解析记录。
+4. 系统统一归档重命名为 `矢吉-{销售方名称}-{用途}-{金额}元-{发票号码}.pdf` 并保存到 `backend/archives/`。
+5. 返回结构化 JSON 并写入 SQLite。
+6. 会计页面展示全部解析记录。

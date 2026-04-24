@@ -7,6 +7,13 @@ from app.core.config import settings
 
 
 JSON_PATTERN = re.compile(r"\{[\s\S]*\}")
+COMPANY_CONTEXT = (
+    "企业报销主体信息如下：\n"
+    "公司名称：上海矢吉信息科技有限公司\n"
+    "开户银行：宁波银行股份有限公司上海徐汇支行\n"
+    "开户账号：70030122000464825\n"
+    "统一社会信用代码：91310120342086465C\n"
+)
 
 
 async def parse_invoice_with_llm(raw_text: str) -> dict:
@@ -28,7 +35,9 @@ async def parse_invoice_with_llm(raw_text: str) -> dict:
         "字段为："
         "seller_name(销售方名称), purpose(用途分类，只能从以下枚举中选一个：食品/交通/住宿/办公/通信/培训/医疗/服务/设备/其他), amount(数字), "
         "invoice_number(发票号码), date(YYYY-MM-DD), tax_id(销售方税号)。"
-        "无法确定请返回 null。\n\n"
+        "无法确定请返回 null。\n"
+        "以下是企业固定背景信息，请结合判断但不要输出额外字段：\n"
+        f"{COMPANY_CONTEXT}\n"
         f"发票文本:\n{raw_text[:12000]}"
     )
 

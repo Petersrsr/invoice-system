@@ -1,4 +1,5 @@
 [Unit]
+# 前端预览服务（提供 Vite preview 静态页面）。
 Description=Invoice System Frontend (Vite Preview)
 After=network.target
 

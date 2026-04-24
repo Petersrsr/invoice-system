@@ -7,6 +7,7 @@ from app.core.config import settings
 
 
 JSON_PATTERN = re.compile(r"\{[\s\S]*\}")
+# 企业主体背景：帮助模型更稳定理解发票上下文。
 COMPANY_CONTEXT = (
     "企业报销主体信息如下：\n"
     "公司名称：上海矢吉信息科技有限公司\n"
@@ -17,6 +18,7 @@ COMPANY_CONTEXT = (
 
 
 async def parse_invoice_with_llm(raw_text: str) -> dict:
+    # 本地未配置密钥时返回空结构，便于前后端联调。
     if not settings.llm_api_key:
         return {
             "amount": None,
@@ -64,6 +66,7 @@ async def parse_invoice_with_llm(raw_text: str) -> dict:
 
 
 def _safe_parse_json(content: str) -> dict:
+    # 模型偶尔会返回带说明文本，尝试提取 JSON 片段兜底。
     try:
         return json.loads(content)
     except json.JSONDecodeError:

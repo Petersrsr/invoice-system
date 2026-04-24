@@ -4,6 +4,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.database import Base
 
 
+# 发票主表：保存解析结果、文件映射与审计原文。
 class InvoiceRecord(Base):
     __tablename__ = "invoice_records"
 

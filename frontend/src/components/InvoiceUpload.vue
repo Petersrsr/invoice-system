@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { uploadInvoice } from "../api/invoice";
 
+// 上传成功时通知父组件，可选用于刷新列表。
 const emit = defineEmits<{ (e: "uploaded"): void }>();
 
 const isDragging = ref(false);
@@ -17,6 +18,7 @@ function onDragLeave() {
 }
 
 async function handleFile(file: File) {
+  // 仅允许 PDF，避免后端不必要的解析失败。
   if (!file || file.type !== "application/pdf") {
     message.value = "仅支持 PDF 文件";
     return;
@@ -25,6 +27,7 @@ async function handleFile(file: File) {
   message.value = "正在上传并解析，请稍候...";
   try {
     const result = await uploadInvoice(file);
+    // 覆盖旧发票时给出更强提示，避免员工误解为新建记录。
     if (result?.replaced) {
       message.value = "重复发票号：已覆盖旧文件并更新记录";
       window.alert(result?.message ?? "检测到重复发票号，已覆盖旧文件并更新记录");
@@ -42,6 +45,7 @@ async function handleFile(file: File) {
 
 function onDrop(e: DragEvent) {
   e.preventDefault();
+  // 拖拽模式只取第一个文件。
   const file = e.dataTransfer?.files?.[0];
   if (file) {
     handleFile(file);

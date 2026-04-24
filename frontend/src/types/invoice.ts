@@ -1,3 +1,4 @@
+// 上传成功后后端返回的抽取字段结构。
 export interface InvoiceExtracted {
   amount: number | null;
   date: string | null;
@@ -9,6 +10,7 @@ export interface InvoiceExtracted {
   item_name: string | null;
 }
 
+// 上传接口响应：包含记录 ID、归档文件名与覆盖标记。
 export interface UploadInvoiceResponse {
   id: number;
   file_name: string;
@@ -17,6 +19,7 @@ export interface UploadInvoiceResponse {
   extracted: InvoiceExtracted;
 }
 
+// 会计列表页面使用的行数据结构。
 export interface InvoiceRecord {
   id: number;
   file_name: string;
@@ -31,6 +34,7 @@ export interface InvoiceRecord {
   created_at: string;
 }
 
+// 发票详情结构：含文件链接、预览图与原始文本。
 export interface InvoiceDetail {
   id: number;
   file_name: string;

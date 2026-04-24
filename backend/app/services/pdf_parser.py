@@ -3,6 +3,7 @@ from pathlib import Path
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    # 提取整份 PDF 的可读文本，供 LLM 与规则解析使用。
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     texts: list[str] = []
     for page in doc:
@@ -12,6 +13,7 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
 
 
 def render_pdf_first_page_to_png(pdf_bytes: bytes, output_path: str) -> None:
+    # 仅渲染首页作为预览图，平衡展示效果与性能。
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     try:
         page = doc[0]

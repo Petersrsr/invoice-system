@@ -28,6 +28,7 @@ router = APIRouter()
 
 @router.post("/upload", response_model=InvoiceCreateResponse)
 async def upload_invoice(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    # 仅允许 PDF，避免后续解析链路浪费资源。
     if file.content_type not in {"application/pdf", "application/x-pdf"}:
         raise HTTPException(status_code=400, detail="仅支持 PDF 文件")
 
@@ -38,6 +39,7 @@ async def upload_invoice(file: UploadFile = File(...), db: Session = Depends(get
     raw_text = extract_text_from_pdf(pdf_bytes)
     extracted = await parse_invoice_with_llm(raw_text)
     extracted = normalize_extracted_fields(raw_text, extracted)
+    # 当前去重策略：按发票号命中则覆盖更新，不新增记录。
     duplicate = find_invoice_by_number(db, extracted.get("invoice_number"))
     replaced = duplicate is not None
     if duplicate:
@@ -109,6 +111,7 @@ async def upload_invoice(file: UploadFile = File(...), db: Session = Depends(get
 
 @router.get("", response_model=list[InvoiceListItem])
 def get_all_invoices(db: Session = Depends(get_db)):
+    # 按 id 倒序输出，最近上传优先展示。
     records = list_invoices(db)
     return [
         InvoiceListItem(
@@ -156,6 +159,7 @@ def get_invoice_detail(invoice_id: int, db: Session = Depends(get_db)):
 
 
 def _write_meta(invoice_id: int, payload: dict) -> None:
+    # 预览元信息用于详情页映射 source/archive 的图片文件名。
     meta_dir = Path(settings.meta_dir)
     meta_dir.mkdir(parents=True, exist_ok=True)
     meta_file = meta_dir / f"{invoice_id}.json"
@@ -163,6 +167,7 @@ def _write_meta(invoice_id: int, payload: dict) -> None:
 
 
 def _preview_url_by_id(invoice_id: int, key: str) -> str | None:
+    # 从 meta 文件读取对应预览图并转换为静态资源 URL。
     meta_file = Path(settings.meta_dir) / f"{invoice_id}.json"
     if not meta_file.exists():
         return None

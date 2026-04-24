@@ -1,4 +1,5 @@
 {
+  // 前端 TypeScript 编译选项，保持严格模式避免隐式类型问题。
   "compilerOptions": {
     "target": "ES2020",
     "module": "ESNext",

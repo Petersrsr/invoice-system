@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 清理脚本：删除测试文件并清空 invoice_records，便于重复联调。
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BACKEND_DIR="${PROJECT_ROOT}/backend"
@@ -29,6 +30,7 @@ if [[ ! -f "${DB_PATH}" ]]; then
   exit 0
 fi
 
+# 使用内联 Python 执行 SQLite 清表与自增序列重置。
 python3 - <<PY
 import sqlite3
 from pathlib import Path

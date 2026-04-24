@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { InvoiceRecord } from "../types/invoice";
 
+// 会计页传入汇总数据，点击任意行触发详情查询。
 defineProps<{ data: InvoiceRecord[] }>();
 const emit = defineEmits<{ (e: "select", id: number): void }>();
 </script>

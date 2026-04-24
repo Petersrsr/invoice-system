@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 
 
+# LLM 与规则兜底后的字段结构。
 class InvoiceExtractedData(BaseModel):
     amount: float | None = None
     date: str | None = None

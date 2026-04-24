@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.db.database import Base, engine
 
 
+# 启动时创建缺失表（MVP 阶段不引入迁移工具）。
 Base.metadata.create_all(bind=engine)
 _SQLITE_EXTRA_COLUMNS: dict[str, str] = {
     "source_file_name": "VARCHAR(255)",
@@ -18,6 +19,7 @@ _SQLITE_EXTRA_COLUMNS: dict[str, str] = {
 
 
 def _ensure_sqlite_columns() -> None:
+    # 兼容历史 SQLite：在旧库缺少新增字段时自动补齐。
     if not settings.database_url.startswith("sqlite:///"):
         return
     db_path = settings.database_url.replace("sqlite:///", "", 1)
@@ -37,6 +39,7 @@ _ensure_sqlite_columns()
 
 app = FastAPI(title=settings.app_name)
 
+# 当前为内网 MVP，CORS 先全开，后续应收敛白名单。
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -47,7 +50,7 @@ app.add_middleware(
 
 app.include_router(invoice_router, prefix="/api/invoices", tags=["invoices"])
 
-# Ensure audit-related file directories are always present before serving.
+# 保证审计相关目录在服务启动前存在，避免静态文件挂载失败。
 for path in (settings.source_dir, settings.archive_dir, settings.preview_dir, settings.meta_dir):
     Path(path).mkdir(parents=True, exist_ok=True)
 

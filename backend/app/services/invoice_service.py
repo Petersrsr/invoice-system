@@ -20,6 +20,7 @@ PURPOSE_KEYWORDS: dict[str, list[str]] = {
 
 
 def save_invoice(db: Session, file_name: str, raw_text: str, extracted: dict) -> InvoiceRecord:
+    # 兼容旧接口的保留方法（当前主流程优先使用 save_invoice_with_files）。
     record = InvoiceRecord(
         file_name=file_name,
         invoice_number=extracted.get("invoice_number"),
@@ -63,6 +64,7 @@ def save_invoice_with_files(
 
 
 def list_invoices(db: Session) -> list[InvoiceRecord]:
+    # 会计页面按最新记录优先查看。
     return db.query(InvoiceRecord).order_by(InvoiceRecord.id.desc()).all()
 
 
@@ -82,7 +84,7 @@ def find_invoice_by_number(db: Session, invoice_number: str | None) -> InvoiceRe
     )
     if record:
         return record
-    # Backward compatibility for historical rows without invoice_number column data.
+    # 兼容历史数据：若旧行没有 invoice_number，则从文件名反推出发票号。
     for item in list_invoices(db):
         if _normalize_invoice_number(extract_invoice_number_from_file_name(item.file_name)) == number:
             return item
@@ -115,6 +117,7 @@ def update_invoice_with_files(
 
 
 def normalize_extracted_fields(raw_text: str, extracted: dict | None) -> dict:
+    # 先信任 LLM，再用规则补齐缺失字段。
     data = dict(extracted or {})
     data.setdefault("seller_name", data.get("title"))
     data.setdefault("purpose", data.get("item_name"))
@@ -136,7 +139,7 @@ def build_archive_filename(extracted: dict, company_prefix: str = "矢吉") -> s
     invoice_number = _sanitize_filename_part(extracted.get("invoice_number")) or "未知号码"
     base = f"{company_prefix}-{seller_name}-{purpose}-{amount_text}元-{invoice_number}"
     if _utf8_len(base) > 220:
-        # Keep deterministic uniqueness while staying under filesystem limits.
+        # 文件名过长时追加短哈希，兼顾可读性与唯一性。
         short_hash = md5(base.encode("utf-8")).hexdigest()[:8]
         purpose = _truncate_utf8(purpose, 36)
         base = f"{company_prefix}-{seller_name}-{purpose}-{amount_text}元-{invoice_number}-{short_hash}"
@@ -152,6 +155,7 @@ def archive_pdf(pdf_bytes: bytes, file_name: str, archive_dir: str) -> str:
 
 
 def overwrite_pdf(pdf_bytes: bytes, file_name: str, folder: str) -> str:
+    # 用于重复发票覆盖场景，文件名保持原值。
     path = Path(folder)
     path.mkdir(parents=True, exist_ok=True)
     safe_name = _sanitize_filename_part(file_name)
@@ -162,6 +166,7 @@ def overwrite_pdf(pdf_bytes: bytes, file_name: str, folder: str) -> str:
 
 
 def save_source_pdf(pdf_bytes: bytes, original_file_name: str, source_dir: str) -> str:
+    # 源文件默认保留原始文件名，冲突时自动追加序号。
     source_path = Path(source_dir)
     source_path.mkdir(parents=True, exist_ok=True)
     safe_original = _sanitize_filename_part(original_file_name or "unknown.pdf")
@@ -254,6 +259,7 @@ def _utf8_len(text: str) -> int:
 
 
 def _normalize_purpose(purpose: str | None, raw_text: str) -> str:
+    # 用途归类同时参考 LLM 输出与原文关键词，提高稳定性。
     source = f"{purpose or ''} {raw_text}"
     source = source.lower()
     for category, keywords in PURPOSE_KEYWORDS.items():

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { uploadInvoice } from "../api/invoice";
+import type { UploadInvoiceResponse } from "../types/invoice";
 
 // 上传成功时通知父组件，可选用于刷新列表。
-const emit = defineEmits<{ (e: "uploaded"): void }>();
+const emit = defineEmits<{ (e: "uploaded", payload: UploadInvoiceResponse): void }>();
 
 const isDragging = ref(false);
 const loading = ref(false);
@@ -34,7 +35,7 @@ async function handleFile(file: File) {
     } else {
       message.value = result?.message ?? "上传成功，已完成解析";
     }
-    emit("uploaded");
+    emit("uploaded", result);
   } catch (err) {
     message.value = "上传失败，请检查后端服务或 API Key 配置";
   } finally {

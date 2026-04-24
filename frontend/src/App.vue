@@ -3,11 +3,11 @@
 </script>
 
 <template>
-  <main class="min-h-screen bg-slate-50 px-6 py-10">
+  <main class="min-h-screen bg-gradient-to-b from-slate-100 to-slate-50 px-4 py-8 md:px-6 md:py-10">
     <div class="mx-auto max-w-6xl">
-      <header class="mb-8 rounded-2xl bg-white p-6 shadow-sm">
-        <h1 class="text-3xl font-bold tracking-tight text-slate-800">企业自动化发票报销系统</h1>
-        <p class="mt-2 text-slate-500">页面已独立：员工页与会计页不提供互相跳转入口。</p>
+      <header class="mb-6 rounded-2xl bg-white p-5 shadow-sm md:mb-8 md:p-6">
+        <h1 class="text-2xl font-bold tracking-tight text-slate-800 md:text-3xl">企业自动化发票报销系统</h1>
+        <p class="mt-2 text-sm text-slate-500 md:text-base">员工上传发票，会计查看汇总与统计。</p>
       </header>
 
       <RouterView />

@@ -72,11 +72,18 @@ onMounted(loadData);
 </script>
 
 <template>
-  <section class="rounded-2xl bg-white p-6 shadow-sm">
-    <h2 class="mb-2 text-xl font-semibold text-slate-800">会计汇总管理</h2>
-    <p class="text-sm text-slate-500">查看全部解析记录，支持查看源文件、归档文件与预览图。</p>
+  <section class="space-y-4">
+    <div class="rounded-2xl bg-white p-5 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 class="text-xl font-semibold text-slate-800">会计汇总管理</h2>
+          <p class="mt-1 text-sm text-slate-500">查看解析记录、金额统计和用途分布。</p>
+        </div>
+        <span class="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">会计端</span>
+      </div>
+    </div>
 
-    <div class="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <p class="text-xs text-slate-500">发票总数</p>
         <p class="mt-1 text-2xl font-semibold text-slate-800">{{ invoices.length }}</p>
@@ -93,7 +100,7 @@ onMounted(loadData);
       </div>
     </div>
 
-    <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <div class="rounded-xl border border-slate-200 p-4">
         <p class="text-sm font-medium text-slate-700">用途分布（按张数）</p>
         <div v-if="purposeStats.length === 0" class="mt-3 text-xs text-slate-400">暂无数据</div>
@@ -127,7 +134,9 @@ onMounted(loadData);
       </div>
     </div>
 
-    <InvoiceTable :data="invoices" @select="openDetail" />
+    <div class="rounded-2xl bg-white p-5 shadow-sm">
+      <InvoiceTable :data="invoices" @select="openDetail" />
+    </div>
 
     <div v-if="detailOpen" class="fixed inset-0 z-50 bg-black/30 p-4" @click.self="closeDetail">
       <div class="mx-auto mt-16 max-h-[80vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-xl">

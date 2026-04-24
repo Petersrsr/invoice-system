@@ -19,10 +19,23 @@ function closeConfirm() {
 </script>
 
 <template>
-  <section class="rounded-2xl bg-white p-6 shadow-sm">
-    <h2 class="mb-2 text-xl font-semibold text-slate-800">员工发票上传</h2>
-    <p class="mb-6 text-sm text-slate-500">本页面仅提供上传能力，上传后会自动进入后台汇总。</p>
+  <section class="space-y-4">
+    <div class="flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-white p-5 shadow-sm">
+      <div>
+        <h2 class="text-xl font-semibold text-slate-800">员工发票上传</h2>
+        <p class="mt-1 text-sm text-slate-500">请先填写上传人姓名，再上传 PDF 发票。</p>
+      </div>
+      <RouterLink
+        to="/accounting"
+        class="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm text-indigo-700 hover:bg-indigo-100"
+      >
+        前往会计页
+      </RouterLink>
+    </div>
+
+    <div class="rounded-2xl bg-white p-5 shadow-sm">
     <InvoiceUpload @uploaded="onUploaded" />
+    </div>
 
     <div v-if="confirmOpen && latestUpload" class="fixed inset-0 z-50 bg-black/30 p-4" @click.self="closeConfirm">
       <div class="mx-auto mt-16 w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">

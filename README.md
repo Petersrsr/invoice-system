@@ -118,7 +118,7 @@ invoice-system/
 ### 7.1 上传发票
 
 - `POST /api/invoices/upload`
-- `multipart/form-data` 字段：`file`
+- `multipart/form-data` 字段：`file`、`uploader_name`（必填）
 - 仅支持：`application/pdf` / `application/x-pdf`
 - 主要行为：
   - 成功解析后写入数据库与文件目录。
@@ -183,6 +183,7 @@ invoice-system/
 ```bash
 curl -X POST "http://127.0.0.1:8000/api/invoices/upload" \
   -H "Content-Type: multipart/form-data" \
+  -F "uploader_name=张三" \
   -F "file=@/path/to/invoice.pdf"
 ```
 
@@ -292,7 +293,7 @@ sudo journalctl -u invoice-frontend -f
 端口约定：
 
 - 后端：`0.0.0.0:8000`
-- 前端预览：`0.0.0.0:4173`（如使用 `npm run dev`，通常为 `5173`）
+- 前端预览：`0.0.0.0:80`（如使用 `npm run dev`，通常为 `5173`）
 
 ### 10.1 部署教程（从 0 到可访问）
 
@@ -328,6 +329,12 @@ cp .env.example .env
 cd /www/wwwroot/invoice-system/frontend
 npm install
 cp .env.example .env
+```
+
+为避免 `invoice-frontend`（`www` 用户）构建时报权限错误，建议统一目录属主：
+
+```bash
+sudo chown -R www:www /www/wwwroot/invoice-system/frontend
 ```
 
 如需改后端地址，编辑 `frontend/.env` 的：

@@ -15,4 +15,5 @@ fi
 
 # 先构建再 preview，确保 systemd 始终对外提供构建产物。
 npm run build
-exec npm run preview -- --host 0.0.0.0 --port 4173
+# 对外监听 80 端口（配合 systemd 能力授权）。
+exec npm run preview -- --host 0.0.0.0 --port 80

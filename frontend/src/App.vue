@@ -10,6 +10,7 @@ const invoices = ref<InvoiceRecord[]>([]);
 const selected = ref<InvoiceDetail | null>(null);
 const detailOpen = ref(false);
 const detailLoading = ref(false);
+const apiBase = (import.meta.env.VITE_API_ORIGIN as string | undefined) ?? "http://127.0.0.1:8000";
 
 async function loadData() {
   invoices.value = await fetchInvoices();
@@ -62,11 +63,53 @@ onMounted(loadData);
                 <p><span class="text-slate-500">发票号码：</span>{{ selected.invoice_number ?? "-" }}</p>
                 <p><span class="text-slate-500">税号：</span>{{ selected.tax_id ?? "-" }}</p>
                 <p><span class="text-slate-500">入库时间：</span>{{ selected.created_at }}</p>
+                <p>
+                  <span class="text-slate-500">源文件：</span>
+                  <a
+                    v-if="selected.source_file_url"
+                    class="text-indigo-600 hover:underline"
+                    :href="`${apiBase}${selected.source_file_url}`"
+                    target="_blank"
+                  >下载查看</a>
+                  <span v-else>-</span>
+                </p>
+                <p>
+                  <span class="text-slate-500">归档文件：</span>
+                  <a
+                    v-if="selected.archived_file_url"
+                    class="text-indigo-600 hover:underline"
+                    :href="`${apiBase}${selected.archived_file_url}`"
+                    target="_blank"
+                  >下载查看</a>
+                  <span v-else>-</span>
+                </p>
               </div>
 
-              <div>
-                <p class="mb-2 text-sm font-medium text-slate-700">发票提取原文</p>
-                <pre class="whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-xs text-slate-700">{{ selected.raw_text ?? "-" }}</pre>
+              <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <p class="mb-2 text-sm font-medium text-slate-700">源发票预览（首张）</p>
+                  <div class="rounded-xl bg-slate-50 p-3">
+                    <img
+                      v-if="selected.source_preview_image_url || selected.preview_image_url"
+                      :src="`${apiBase}${selected.source_preview_image_url ?? selected.preview_image_url}`"
+                      alt="source invoice preview"
+                      class="max-h-[60vh] w-full object-contain"
+                    />
+                    <p v-else class="text-xs text-slate-500">暂无源发票预览图</p>
+                  </div>
+                </div>
+                <div>
+                  <p class="mb-2 text-sm font-medium text-slate-700">归档发票预览（首张）</p>
+                  <div class="rounded-xl bg-slate-50 p-3">
+                    <img
+                      v-if="selected.archive_preview_image_url || selected.preview_image_url"
+                      :src="`${apiBase}${selected.archive_preview_image_url ?? selected.preview_image_url}`"
+                      alt="archived invoice preview"
+                      class="max-h-[60vh] w-full object-contain"
+                    />
+                    <p v-else class="text-xs text-slate-500">暂无归档发票预览图</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

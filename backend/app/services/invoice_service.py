@@ -22,6 +22,33 @@ PURPOSE_KEYWORDS: dict[str, list[str]] = {
 def save_invoice(db: Session, file_name: str, raw_text: str, extracted: dict) -> InvoiceRecord:
     record = InvoiceRecord(
         file_name=file_name,
+        invoice_number=extracted.get("invoice_number"),
+        amount=_to_float(extracted.get("amount")),
+        invoice_date=extracted.get("date"),
+        title=extracted.get("seller_name"),
+        tax_id=extracted.get("tax_id"),
+        item_name=extracted.get("purpose"),
+        raw_text=raw_text,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def save_invoice_with_files(
+    db: Session,
+    file_name: str,
+    source_file_name: str,
+    archived_file_name: str,
+    raw_text: str,
+    extracted: dict,
+) -> InvoiceRecord:
+    record = InvoiceRecord(
+        file_name=file_name,
+        source_file_name=source_file_name,
+        archived_file_name=archived_file_name,
+        invoice_number=extracted.get("invoice_number"),
         amount=_to_float(extracted.get("amount")),
         invoice_date=extracted.get("date"),
         title=extracted.get("seller_name"),
@@ -37,6 +64,54 @@ def save_invoice(db: Session, file_name: str, raw_text: str, extracted: dict) ->
 
 def list_invoices(db: Session) -> list[InvoiceRecord]:
     return db.query(InvoiceRecord).order_by(InvoiceRecord.id.desc()).all()
+
+
+def get_invoice_by_id(db: Session, invoice_id: int) -> InvoiceRecord | None:
+    return db.query(InvoiceRecord).filter(InvoiceRecord.id == invoice_id).first()
+
+
+def find_invoice_by_number(db: Session, invoice_number: str | None) -> InvoiceRecord | None:
+    number = _normalize_invoice_number(invoice_number)
+    if not number:
+        return None
+    record = (
+        db.query(InvoiceRecord)
+        .filter(InvoiceRecord.invoice_number == number)
+        .order_by(InvoiceRecord.id.desc())
+        .first()
+    )
+    if record:
+        return record
+    # Backward compatibility for historical rows without invoice_number column data.
+    for item in list_invoices(db):
+        if _normalize_invoice_number(extract_invoice_number_from_file_name(item.file_name)) == number:
+            return item
+    return None
+
+
+def update_invoice_with_files(
+    db: Session,
+    record: InvoiceRecord,
+    file_name: str,
+    source_file_name: str,
+    archived_file_name: str,
+    raw_text: str,
+    extracted: dict,
+) -> InvoiceRecord:
+    record.file_name = file_name
+    record.source_file_name = source_file_name
+    record.archived_file_name = archived_file_name
+    record.invoice_number = extracted.get("invoice_number")
+    record.amount = _to_float(extracted.get("amount"))
+    record.invoice_date = extracted.get("date")
+    record.title = extracted.get("seller_name")
+    record.tax_id = extracted.get("tax_id")
+    record.item_name = extracted.get("purpose")
+    record.raw_text = raw_text
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
 
 
 def normalize_extracted_fields(raw_text: str, extracted: dict | None) -> dict:
@@ -76,11 +151,41 @@ def archive_pdf(pdf_bytes: bytes, file_name: str, archive_dir: str) -> str:
     return final_name
 
 
+def overwrite_pdf(pdf_bytes: bytes, file_name: str, folder: str) -> str:
+    path = Path(folder)
+    path.mkdir(parents=True, exist_ok=True)
+    safe_name = _sanitize_filename_part(file_name)
+    if not safe_name.lower().endswith(".pdf"):
+        safe_name = f"{safe_name}.pdf"
+    (path / safe_name).write_bytes(pdf_bytes)
+    return safe_name
+
+
+def save_source_pdf(pdf_bytes: bytes, original_file_name: str, source_dir: str) -> str:
+    source_path = Path(source_dir)
+    source_path.mkdir(parents=True, exist_ok=True)
+    safe_original = _sanitize_filename_part(original_file_name or "unknown.pdf")
+    if not safe_original.lower().endswith(".pdf"):
+        safe_original = f"{safe_original}.pdf"
+    final_name = _make_unique_file_name(source_path, safe_original)
+    (source_path / final_name).write_bytes(pdf_bytes)
+    return final_name
+
+
 def extract_invoice_number_from_file_name(file_name: str) -> str | None:
     match = re.match(r"^矢吉-.+-.+-.+元-(.+?)(?:-\d+)?\.pdf$", file_name)
     if not match:
         return None
     return match.group(1)
+
+
+def _normalize_invoice_number(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    if not cleaned or cleaned in {"未知号码", "null", "None"}:
+        return None
+    return cleaned
 
 
 def _to_float(value):

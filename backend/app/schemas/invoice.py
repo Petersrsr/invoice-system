@@ -15,6 +15,8 @@ class InvoiceExtractedData(BaseModel):
 class InvoiceCreateResponse(BaseModel):
     id: int
     file_name: str
+    replaced: bool = False
+    message: str | None = None
     extracted: InvoiceExtractedData
 
 
@@ -43,5 +45,12 @@ class InvoiceDetailResponse(BaseModel):
     purpose: str | None
     invoice_number: str | None
     tax_id: str | None
+    source_file_name: str | None
+    archived_file_name: str | None
+    source_file_url: str | None
+    archived_file_url: str | None
+    source_preview_image_url: str | None
+    archive_preview_image_url: str | None
+    preview_image_url: str | None
     raw_text: str | None
     created_at: str

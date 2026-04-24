@@ -11,6 +11,9 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./invoice.db"
     archive_dir: str = "./archives"
+    source_dir: str = "./source_files"
+    preview_dir: str = "./previews"
+    meta_dir: str = "./meta"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

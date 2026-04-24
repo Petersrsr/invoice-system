@@ -24,8 +24,13 @@ async function handleFile(file: File) {
   loading.value = true;
   message.value = "正在上传并解析，请稍候...";
   try {
-    await uploadInvoice(file);
-    message.value = "上传成功，已完成解析";
+    const result = await uploadInvoice(file);
+    if (result?.replaced) {
+      message.value = "重复发票号：已覆盖旧文件并更新记录";
+      window.alert(result?.message ?? "检测到重复发票号，已覆盖旧文件并更新记录");
+    } else {
+      message.value = result?.message ?? "上传成功，已完成解析";
+    }
     emit("uploaded");
   } catch (err) {
     message.value = "上传失败，请检查后端服务或 API Key 配置";

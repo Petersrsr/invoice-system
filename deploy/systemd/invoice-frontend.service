@@ -1,0 +1,16 @@
+[Unit]
+Description=Invoice System Frontend (Vite Preview)
+After=network.target
+
+[Service]
+Type=simple
+User=www
+Group=www
+WorkingDirectory=/www/wwwroot/invoice-system
+ExecStart=/www/wwwroot/invoice-system/deploy/start_frontend.sh
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

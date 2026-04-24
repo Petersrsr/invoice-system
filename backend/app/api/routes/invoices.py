@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
@@ -8,12 +11,17 @@ from app.services.invoice_service import (
     archive_pdf,
     build_archive_filename,
     extract_invoice_number_from_file_name,
+    find_invoice_by_number,
+    get_invoice_by_id,
     list_invoices,
     normalize_extracted_fields,
-    save_invoice,
+    overwrite_pdf,
+    save_invoice_with_files,
+    save_source_pdf,
+    update_invoice_with_files,
 )
 from app.services.llm_client import parse_invoice_with_llm
-from app.services.pdf_parser import extract_text_from_pdf
+from app.services.pdf_parser import extract_text_from_pdf, render_pdf_first_page_to_png
 
 router = APIRouter()
 
@@ -30,19 +38,68 @@ async def upload_invoice(file: UploadFile = File(...), db: Session = Depends(get
     raw_text = extract_text_from_pdf(pdf_bytes)
     extracted = await parse_invoice_with_llm(raw_text)
     extracted = normalize_extracted_fields(raw_text, extracted)
-    archive_name = build_archive_filename(extracted, company_prefix="矢吉")
-    archive_name = archive_pdf(pdf_bytes, archive_name, settings.archive_dir)
-    record = save_invoice(db, archive_name, raw_text, extracted)
+    duplicate = find_invoice_by_number(db, extracted.get("invoice_number"))
+    replaced = duplicate is not None
+    if duplicate:
+        source_name = overwrite_pdf(
+            pdf_bytes,
+            duplicate.source_file_name or (file.filename or "unknown.pdf"),
+            settings.source_dir,
+        )
+        archive_name = overwrite_pdf(
+            pdf_bytes,
+            duplicate.archived_file_name or build_archive_filename(extracted, company_prefix="矢吉"),
+            settings.archive_dir,
+        )
+        record = update_invoice_with_files(
+            db,
+            duplicate,
+            file_name=archive_name,
+            source_file_name=source_name,
+            archived_file_name=archive_name,
+            raw_text=raw_text,
+            extracted=extracted,
+        )
+    else:
+        source_name = save_source_pdf(pdf_bytes, file.filename or "unknown.pdf", settings.source_dir)
+        archive_name = build_archive_filename(extracted, company_prefix="矢吉")
+        archive_name = archive_pdf(pdf_bytes, archive_name, settings.archive_dir)
+        record = save_invoice_with_files(
+            db,
+            file_name=archive_name,
+            source_file_name=source_name,
+            archived_file_name=archive_name,
+            raw_text=raw_text,
+            extracted=extracted,
+        )
+
+    source_preview_name = f"{record.id}-source.png"
+    archive_preview_name = f"{record.id}-archive.png"
+    source_preview_path = str(Path(settings.preview_dir) / source_preview_name)
+    archive_preview_path = str(Path(settings.preview_dir) / archive_preview_name)
+    render_pdf_first_page_to_png(pdf_bytes, source_preview_path)
+    render_pdf_first_page_to_png(pdf_bytes, archive_preview_path)
+    _write_meta(
+        record.id,
+        {
+            "source_preview_image_name": source_preview_name,
+            "archive_preview_image_name": archive_preview_name,
+            # Backward compatibility for older frontend payloads.
+            "preview_image_name": archive_preview_name,
+        },
+    )
 
     return InvoiceCreateResponse(
         id=record.id,
         file_name=record.file_name,
+        replaced=replaced,
+        message="检测到重复发票号，已覆盖旧文件并更新记录" if replaced else "上传成功，已完成解析",
         extracted=InvoiceExtractedData(
             amount=record.amount,
             date=record.invoice_date,
             seller_name=record.title,
             purpose=record.item_name,
-            invoice_number=extract_invoice_number_from_file_name(record.file_name),
+            invoice_number=record.invoice_number or extract_invoice_number_from_file_name(record.file_name),
             tax_id=record.tax_id,
             title=record.title,
             item_name=record.item_name,
@@ -61,7 +118,7 @@ def get_all_invoices(db: Session = Depends(get_db)):
             invoice_date=r.invoice_date,
             seller_name=r.title,
             purpose=r.item_name,
-            invoice_number=extract_invoice_number_from_file_name(r.file_name),
+            invoice_number=r.invoice_number or extract_invoice_number_from_file_name(r.file_name),
             title=r.title,
             tax_id=r.tax_id,
             item_name=r.item_name,
@@ -73,8 +130,7 @@ def get_all_invoices(db: Session = Depends(get_db)):
 
 @router.get("/{invoice_id}", response_model=InvoiceDetailResponse)
 def get_invoice_detail(invoice_id: int, db: Session = Depends(get_db)):
-    records = list_invoices(db)
-    target = next((r for r in records if r.id == invoice_id), None)
+    target = get_invoice_by_id(db, invoice_id)
     if not target:
         raise HTTPException(status_code=404, detail="发票记录不存在")
 
@@ -85,8 +141,36 @@ def get_invoice_detail(invoice_id: int, db: Session = Depends(get_db)):
         invoice_date=target.invoice_date,
         seller_name=target.title,
         purpose=target.item_name,
-        invoice_number=extract_invoice_number_from_file_name(target.file_name),
+        invoice_number=target.invoice_number or extract_invoice_number_from_file_name(target.file_name),
         tax_id=target.tax_id,
         raw_text=target.raw_text,
+        source_file_name=target.source_file_name,
+        archived_file_name=target.archived_file_name,
+        source_file_url=f"/files/source/{target.source_file_name}" if target.source_file_name else None,
+        archived_file_url=f"/files/archive/{target.archived_file_name}" if target.archived_file_name else None,
+        source_preview_image_url=_preview_url_by_id(target.id, "source_preview_image_name"),
+        archive_preview_image_url=_preview_url_by_id(target.id, "archive_preview_image_name"),
+        preview_image_url=_preview_url_by_id(target.id, "preview_image_name"),
         created_at=target.created_at.isoformat() if hasattr(target.created_at, "isoformat") else str(target.created_at),
     )
+
+
+def _write_meta(invoice_id: int, payload: dict) -> None:
+    meta_dir = Path(settings.meta_dir)
+    meta_dir.mkdir(parents=True, exist_ok=True)
+    meta_file = meta_dir / f"{invoice_id}.json"
+    meta_file.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+
+def _preview_url_by_id(invoice_id: int, key: str) -> str | None:
+    meta_file = Path(settings.meta_dir) / f"{invoice_id}.json"
+    if not meta_file.exists():
+        return None
+    try:
+        data = json.loads(meta_file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    preview_name = data.get(key)
+    if not preview_name:
+        return None
+    return f"/files/preview/{preview_name}"

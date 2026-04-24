@@ -9,6 +9,9 @@ class InvoiceRecord(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    archived_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    invoice_number: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     amount: Mapped[float | None] = mapped_column(Float, nullable=True)
     invoice_date: Mapped[str | None] = mapped_column(String(50), nullable=True)
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)

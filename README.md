@@ -30,6 +30,7 @@
   - 归档发票预览图（首张）。
 - 审计留存目录：`source_files`、`archives`、`previews`、`meta`。
 - 发票号去重策略：检测重复时覆盖旧文件并更新原记录，前端弹窗提示。
+- LLM 提示词已预设企业主体信息（公司名称、开户行、账号、统一社会信用代码）作为解析背景上下文。
 - 提供 `systemd` 常驻部署文件，服务监听 `0.0.0.0`。
 
 ## 3. 技术栈
@@ -72,15 +73,15 @@ invoice-system/
 │  │  └─ env.d.ts
 │  ├─ package.json
 │  └─ .env.example
-└─ deploy/
+├─ deploy/
    ├─ start_backend.sh
    ├─ start_frontend.sh
    └─ systemd/
       ├─ invoice-backend.service
       └─ invoice-frontend.service
-```
 └─ scripts/
    └─ clean_test_data.sh
+```
 
 
 ## 5. 核心业务流程
@@ -107,11 +108,21 @@ invoice-system/
 
 ## 7. API 说明（MVP）
 
+基础约定：
+
+- 基础路径：`/api/invoices`
+- 响应格式：JSON
+- 编码：UTF-8
+- 鉴权：当前 MVP 暂无鉴权（仅建议内网使用）
+
 ### 7.1 上传发票
 
 - `POST /api/invoices/upload`
 - `multipart/form-data` 字段：`file`
 - 仅支持：`application/pdf` / `application/x-pdf`
+- 主要行为：
+  - 成功解析后写入数据库与文件目录。
+  - 命中重复发票号时，覆盖旧文件并更新原记录。
 
 成功返回（示例）：
 
@@ -138,6 +149,12 @@ invoice-system/
 
 - `GET /api/invoices`
 - 返回按 `id desc` 排序。
+- 关键返回字段：
+  - `id`、`file_name`
+  - `amount`、`invoice_date`
+  - `seller_name`、`purpose`
+  - `invoice_number`、`tax_id`
+  - `created_at`
 
 ### 7.3 发票详情
 
@@ -147,10 +164,39 @@ invoice-system/
   - `archived_file_url`
   - `source_preview_image_url`
   - `archive_preview_image_url`
+  - `raw_text`（用于审计或人工复核）
 
 ### 7.4 健康检查
 
 - `GET /health` -> `{"status":"ok"}`
+
+### 7.5 常见错误码
+
+- `400`：文件类型不是 PDF 或文件为空。
+- `404`：发票详情 ID 不存在。
+- `500`：PDF 解析异常、LLM 调用异常、数据库读写异常等服务端错误。
+
+### 7.6 cURL 调试示例
+
+上传发票：
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/invoices/upload" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@/path/to/invoice.pdf"
+```
+
+查询列表：
+
+```bash
+curl "http://127.0.0.1:8000/api/invoices"
+```
+
+查询详情：
+
+```bash
+curl "http://127.0.0.1:8000/api/invoices/1"
+```
 
 ## 8. 环境变量
 

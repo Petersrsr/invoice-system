@@ -56,13 +56,27 @@ async def parse_invoice_with_llm(raw_text: str) -> dict:
         "Content-Type": "application/json",
     }
 
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(url, headers=headers, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
 
-    content = data["choices"][0]["message"]["content"]
-    return _safe_parse_json(content)
+        content = data["choices"][0]["message"]["content"]
+        return _safe_parse_json(content)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"LLM API 调用失败: {str(e)}")
+        return {
+            "amount": None,
+            "date": None,
+            "seller_name": None,
+            "purpose": None,
+            "invoice_number": None,
+            "tax_id": None,
+            "_note": f"LLM API 调用失败: {str(e)}",
+        }
 
 
 def _safe_parse_json(content: str) -> dict:

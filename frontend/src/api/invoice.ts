@@ -24,14 +24,26 @@ const http = axios.create({
 });
 
 // 上传发票 PDF，后端返回解析结果与是否覆盖信息。
-export async function uploadInvoice(file: File, uploaderName: string): Promise<UploadInvoiceResponse> {
+export async function uploadInvoice(file: File, uploaderName: string, draft: boolean = true): Promise<UploadInvoiceResponse> {
   const form = new FormData();
   form.append("file", file);
   form.append("uploader_name", uploaderName);
+  form.append("draft", String(draft));
   const resp = await http.post("/invoices/upload", form, {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return resp.data;
+}
+
+// 确认提交草稿
+export async function confirmInvoice(id: number): Promise<UploadInvoiceResponse> {
+  const resp = await http.post(`/invoices/${id}/confirm`);
+  return resp.data;
+}
+
+// 取消并删除草稿
+export async function cancelInvoice(id: number): Promise<void> {
+  await http.delete(`/invoices/${id}/cancel`);
 }
 
 // 拉取会计汇总列表。
@@ -50,4 +62,9 @@ export async function fetchInvoiceDetail(id: number): Promise<InvoiceDetail> {
 export async function approveInvoice(id: number, approval: ApprovalRequest): Promise<ApprovalResponse> {
   const resp = await http.post(`/invoices/${id}/approve`, approval);
   return resp.data;
+}
+
+// 删除发票（彻底删除）
+export async function deleteInvoice(id: number): Promise<void> {
+  await http.delete(`/invoices/${id}/delete`);
 }

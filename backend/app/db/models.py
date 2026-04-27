@@ -1,4 +1,6 @@
-from sqlalchemy import Date, DateTime, Float, Integer, String, Text, func
+from datetime import datetime
+
+from sqlalchemy import DateTime, Float, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -19,8 +21,8 @@ class InvoiceRecord(Base):
     tax_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     item_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     approval_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     approval_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     approver_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    approved_at: Mapped[str | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

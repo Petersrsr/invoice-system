@@ -151,33 +151,42 @@ def build_archive_filename(extracted: dict, company_prefix: str = "矢吉") -> s
 
 
 def archive_pdf(pdf_bytes: bytes, file_name: str, archive_dir: str) -> str:
-    archive_path = Path(archive_dir)
+    archive_path = Path(archive_dir).resolve()
     archive_path.mkdir(parents=True, exist_ok=True)
     final_name = _make_unique_file_name(archive_path, file_name)
-    (archive_path / final_name).write_bytes(pdf_bytes)
+    final_path = (archive_path / final_name).resolve()
+    if not str(final_path).startswith(str(archive_path)):
+        raise ValueError("无效的文件路径")
+    final_path.write_bytes(pdf_bytes)
     return final_name
 
 
 def overwrite_pdf(pdf_bytes: bytes, file_name: str, folder: str) -> str:
     # 用于重复发票覆盖场景，文件名保持原值。
-    path = Path(folder)
-    path.mkdir(parents=True, exist_ok=True)
+    path = Path(folder).resolve()
     safe_name = _sanitize_filename_part(file_name)
     if not safe_name.lower().endswith(".pdf"):
         safe_name = f"{safe_name}.pdf"
-    (path / safe_name).write_bytes(pdf_bytes)
+    final_path = (path / safe_name).resolve()
+    if not str(final_path).startswith(str(path)):
+        raise ValueError("无效的文件路径")
+    path.mkdir(parents=True, exist_ok=True)
+    final_path.write_bytes(pdf_bytes)
     return safe_name
 
 
 def save_source_pdf(pdf_bytes: bytes, original_file_name: str, source_dir: str) -> str:
     # 源文件默认保留原始文件名，冲突时自动追加序号。
-    source_path = Path(source_dir)
+    source_path = Path(source_dir).resolve()
     source_path.mkdir(parents=True, exist_ok=True)
     safe_original = _sanitize_filename_part(original_file_name or "unknown.pdf")
     if not safe_original.lower().endswith(".pdf"):
         safe_original = f"{safe_original}.pdf"
     final_name = _make_unique_file_name(source_path, safe_original)
-    (source_path / final_name).write_bytes(pdf_bytes)
+    final_path = (source_path / final_name).resolve()
+    if not str(final_path).startswith(str(source_path)):
+        raise ValueError("无效的文件路径")
+    final_path.write_bytes(pdf_bytes)
     return final_name
 
 

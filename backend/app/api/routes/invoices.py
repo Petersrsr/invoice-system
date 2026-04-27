@@ -37,13 +37,13 @@ router = APIRouter()
 async def upload_invoice(
     file: UploadFile = File(...),
     uploader_name: str = Form(...),
+    draft: bool = Form(False),
     db: Session = Depends(get_db),
 ):
     uploader_name = uploader_name.strip()
     if not uploader_name:
         raise HTTPException(status_code=400, detail="上传人姓名不能为空")
 
-    # 仅允许 PDF，避免后续解析链路浪费资源。
     if file.content_type not in {"application/pdf", "application/x-pdf"}:
         raise HTTPException(status_code=400, detail="仅支持 PDF 文件")
 
@@ -54,10 +54,14 @@ async def upload_invoice(
     raw_text = extract_text_from_pdf(pdf_bytes)
     extracted = await parse_invoice_with_llm(raw_text)
     extracted = normalize_extracted_fields(raw_text, extracted)
-    # 当前去重策略：按发票号命中则覆盖更新，不新增记录。
-    duplicate = find_invoice_by_number(db, extracted.get("invoice_number"))
-    replaced = duplicate is not None
-    if duplicate:
+    
+    replaced = False
+    duplicate = None
+    if not draft:
+        duplicate = find_invoice_by_number(db, extracted.get("invoice_number"))
+        replaced = duplicate is not None
+    
+    if duplicate and not draft:
         source_name = overwrite_pdf(
             pdf_bytes,
             duplicate.source_file_name or (file.filename or "unknown.pdf"),
@@ -96,8 +100,15 @@ async def upload_invoice(
     archive_preview_name = f"{record.id}-archive.png"
     source_preview_path = str(Path(settings.preview_dir) / source_preview_name)
     archive_preview_path = str(Path(settings.preview_dir) / archive_preview_name)
-    render_pdf_first_page_to_png(pdf_bytes, source_preview_path)
-    render_pdf_first_page_to_png(pdf_bytes, archive_preview_path)
+    
+    try:
+        render_pdf_first_page_to_png(pdf_bytes, source_preview_path)
+        render_pdf_first_page_to_png(pdf_bytes, archive_preview_path)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"预览图生成失败: {str(e)}")
+    
     _write_meta(
         record.id,
         {
@@ -219,13 +230,15 @@ def approve_invoice(
     if approval.status not in ("approved", "rejected"):
         raise HTTPException(status_code=400, detail="审批状态只能是 approved 或 rejected")
 
+    if not approval.approver_name or not approval.approver_name.strip():
+        raise HTTPException(status_code=400, detail="审批人姓名不能为空")
+
     from datetime import datetime
     target.approval_status = approval.status
     target.approval_comment = approval.comment
-    target.approver_name = approval.approver_name
+    target.approver_name = approval.approver_name.strip()
     target.approved_at = datetime.utcnow()
     db.commit()
-    db.refresh(target)
 
     return ApprovalResponse(
         id=target.id,
@@ -234,3 +247,79 @@ def approve_invoice(
         approver_name=target.approver_name,
         approved_at=target.approved_at.isoformat() if target.approved_at else None,
     )
+
+
+@router.post("/{invoice_id}/confirm")
+def confirm_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+):
+    target = get_invoice_by_id(db, invoice_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="发票记录不存在")
+    
+    target.approval_status = "pending"
+    db.commit()
+    
+    return InvoiceCreateResponse(
+        id=target.id,
+        file_name=target.file_name,
+        uploader_name=target.uploader_name,
+        replaced=False,
+        message="提交成功",
+        extracted=InvoiceExtractedData(
+            amount=target.amount,
+            date=target.invoice_date,
+            seller_name=target.title,
+            purpose=target.item_name,
+            invoice_number=target.invoice_number,
+            tax_id=target.tax_id,
+            title=target.title,
+            item_name=target.item_name,
+        ),
+    )
+
+
+@router.delete("/{invoice_id}/cancel")
+def cancel_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+):
+    target = get_invoice_by_id(db, invoice_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="发票记录不存在")
+    
+    db.delete(target)
+    db.commit()
+    
+    return {"status": "ok", "message": "已取消并删除草稿"}
+
+
+@router.delete("/{invoice_id}/delete")
+def delete_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+):
+    target = get_invoice_by_id(db, invoice_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="发票记录不存在")
+    
+    source_path = Path(settings.source_dir) / (target.source_file_name or "")
+    archive_path = Path(settings.archive_dir) / (target.archived_file_name or "")
+    source_preview_path = Path(settings.preview_dir) / f"{invoice_id}-source.png"
+    archive_preview_path = Path(settings.preview_dir) / f"{invoice_id}-archive.png"
+    meta_path = Path(settings.meta_dir) / f"{invoice_id}.json"
+    
+    for file_path in [source_path, archive_path, source_preview_path, archive_preview_path, meta_path]:
+        if file_path.exists():
+            try:
+                file_path.unlink()
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"删除文件失败: {file_path} - {str(e)}")
+    
+    db.delete(target)
+    db.commit()
+    
+    return {"status": "ok", "message": "已彻底删除发票记录及所有相关文件"}

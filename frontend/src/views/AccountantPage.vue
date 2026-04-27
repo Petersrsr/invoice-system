@@ -14,6 +14,9 @@ const approvalDialogOpen = ref(false);
 const approvalForm = ref({ status: "approved" as "approved" | "rejected", comment: "", approverName: "" });
 const defaultApiOrigin = `${window.location.protocol}//${window.location.hostname}:8000`;
 const apiBase = (import.meta.env.VITE_API_ORIGIN as string | undefined) ?? defaultApiOrigin;
+const imagePreviewOpen = ref(false);
+const imagePreviewSrc = ref("");
+const imagePreviewAlt = ref("");
 
 const totalAmount = computed(() =>
   invoices.value.reduce((sum, row) => sum + (row.amount ?? 0), 0),
@@ -46,6 +49,18 @@ const uploaderStats = computed(() => {
     .slice(0, 8);
 });
 
+function openImagePreview(src: string, alt: string) {
+  imagePreviewSrc.value = src;
+  imagePreviewAlt.value = alt;
+  imagePreviewOpen.value = true;
+}
+
+function closeImagePreview() {
+  imagePreviewOpen.value = false;
+  imagePreviewSrc.value = "";
+  imagePreviewAlt.value = "";
+}
+
 function purposeBarWidth(count: number): string {
   const max = purposeStats.value[0]?.count ?? 1;
   return `${Math.max((count / max) * 100, 6)}%`;
@@ -56,12 +71,10 @@ function uploaderBarWidth(amount: number): string {
   return `${Math.max((amount / max) * 100, 6)}%`;
 }
 
-// 会计页初始化时拉取汇总列表。
 async function loadData() {
   invoices.value = await fetchInvoices();
 }
 
-// 点击某条记录后展示详情弹窗。
 async function openDetail(id: number) {
   detailLoading.value = true;
   detailOpen.value = true;
@@ -88,13 +101,17 @@ async function submitApproval() {
   }
   approvalLoading.value = true;
   try {
-    await approveInvoice(selected.value.id, approvalForm.value);
+    await approveInvoice(selected.value.id, {
+      status: approvalForm.value.status,
+      comment: approvalForm.value.comment,
+      approver_name: approvalForm.value.approverName.trim(),
+    });
     approvalDialogOpen.value = false;
     selected.value = await fetchInvoiceDetail(selected.value.id);
     await loadData();
     alert("审批提交成功");
   } catch (err) {
-    alert("审批提交失败");
+    alert("审批提交失败，请重试");
   } finally {
     approvalLoading.value = false;
   }
@@ -108,33 +125,36 @@ onMounted(loadData);
     <div class="rounded-2xl bg-white p-5 shadow-sm">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 class="text-xl font-semibold text-slate-800">会计汇总管理</h2>
-          <p class="mt-1 text-sm text-slate-500">查看解析记录、金额统计和用途分布。</p>
+          <h2 class="text-xl font-semibold text-slate-800">发票管理</h2>
+          <p class="mt-1 text-sm text-slate-500">查看发票记录、统计分析及审批管理</p>
         </div>
-        <span class="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">会计端</span>
       </div>
     </div>
 
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <p class="text-xs text-slate-500">发票总数</p>
-        <p class="mt-1 text-2xl font-semibold text-slate-800">{{ invoices.length }}</p>
+        <p class="mt-1 text-2xl font-semibold text-slate-800">{{ invoices.length }} 张</p>
       </div>
       <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <p class="text-xs text-slate-500">金额汇总（元）</p>
-        <p class="mt-1 text-2xl font-semibold text-slate-800">{{ totalAmount.toFixed(2) }}</p>
+        <p class="text-xs text-slate-500">总金额</p>
+        <p class="mt-1 text-2xl font-semibold text-slate-800">{{ totalAmount.toFixed(2) }} 元</p>
       </div>
       <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <p class="text-xs text-slate-500">待审批 / 已批准 / 已拒绝</p>
+        <p class="text-xs text-slate-500">审批状态</p>
         <p class="mt-1 text-2xl font-semibold text-slate-800">
-          {{ pendingCount }} / {{ approvedCount }} / {{ rejectedCount }}
+          <span class="text-yellow-600">{{ pendingCount }}</span>
+          <span class="text-slate-400"> / </span>
+          <span class="text-green-600">{{ approvedCount }}</span>
+          <span class="text-slate-400"> / </span>
+          <span class="text-red-600">{{ rejectedCount }}</span>
         </p>
       </div>
     </div>
 
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <div class="rounded-xl border border-slate-200 p-4">
-        <p class="text-sm font-medium text-slate-700">用途分布（按张数）</p>
+        <p class="text-sm font-medium text-slate-700">用途分布</p>
         <div v-if="purposeStats.length === 0" class="mt-3 text-xs text-slate-400">暂无数据</div>
         <div v-else class="mt-3 space-y-2">
           <div v-for="item in purposeStats" :key="item.name">
@@ -150,12 +170,18 @@ onMounted(loadData);
       </div>
 
       <div class="rounded-xl border border-slate-200 p-4">
-        <p class="text-sm font-medium text-slate-700">上传人金额排行（Top 8）</p>
+        <p class="text-sm font-medium text-slate-700">报销金额排行</p>
         <div v-if="uploaderStats.length === 0" class="mt-3 text-xs text-slate-400">暂无数据</div>
         <div v-else class="mt-3 space-y-2">
-          <div v-for="item in uploaderStats" :key="item.name">
+          <div v-for="(item, index) in uploaderStats" :key="item.name">
             <div class="mb-1 flex items-center justify-between text-xs text-slate-600">
-              <span>{{ item.name }}</span>
+              <span class="flex items-center gap-2">
+                <span v-if="index < 3" class="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600">
+                  {{ index + 1 }}
+                </span>
+                <span v-else class="w-4"></span>
+                {{ item.name }}
+              </span>
               <span>{{ item.amount.toFixed(2) }} 元</span>
             </div>
             <div class="h-2 rounded bg-slate-100">
@@ -167,7 +193,7 @@ onMounted(loadData);
     </div>
 
     <div class="rounded-2xl bg-white p-5 shadow-sm">
-      <InvoiceTable :data="invoices" @select="openDetail" />
+      <InvoiceTable :data="invoices" @select="openDetail" @delete="loadData" />
     </div>
 
     <div v-if="detailOpen" class="fixed inset-0 z-50 bg-black/30 p-4" @click.self="closeDetail">
@@ -187,15 +213,15 @@ onMounted(loadData);
         </div>
 
         <div class="max-h-[calc(80vh-64px)] overflow-y-auto p-5">
-          <p v-if="detailLoading" class="text-slate-500">加载中...</p>
+          <p v-if="detailLoading" class="text-center text-slate-500">加载中...</p>
           <div v-else-if="selected" class="space-y-4">
             <div class="grid grid-cols-2 gap-3 text-sm">
               <p><span class="text-slate-500">上传人：</span>{{ selected.uploader_name ?? "-" }}</p>
               <p><span class="text-slate-500">文件名：</span>{{ selected.file_name }}</p>
               <p><span class="text-slate-500">销售方：</span>{{ selected.seller_name ?? "-" }}</p>
               <p><span class="text-slate-500">用途：</span>{{ selected.purpose ?? "-" }}</p>
-              <p><span class="text-slate-500">金额：</span>{{ selected.amount ?? "-" }}</p>
-              <p><span class="text-slate-500">日期：</span>{{ selected.invoice_date ?? "-" }}</p>
+              <p><span class="text-slate-500">金额：</span>{{ selected.amount ?? "-" }} 元</p>
+              <p><span class="text-slate-500">开票日期：</span>{{ selected.invoice_date ?? "-" }}</p>
               <p><span class="text-slate-500">发票号码：</span>{{ selected.invoice_number ?? "-" }}</p>
               <p><span class="text-slate-500">税号：</span>{{ selected.tax_id ?? "-" }}</p>
               <p><span class="text-slate-500">入库时间：</span>{{ selected.created_at }}</p>
@@ -224,7 +250,7 @@ onMounted(loadData);
                   class="text-indigo-600 hover:underline"
                   :href="`${apiBase}${selected.source_file_url}`"
                   target="_blank"
-                >下载查看</a>
+                >下载</a>
                 <span v-else>-</span>
               </p>
               <p>
@@ -234,34 +260,36 @@ onMounted(loadData);
                   class="text-indigo-600 hover:underline"
                   :href="`${apiBase}${selected.archived_file_url}`"
                   target="_blank"
-                >下载查看</a>
+                >下载</a>
                 <span v-else>-</span>
               </p>
             </div>
 
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <p class="mb-2 text-sm font-medium text-slate-700">源发票预览（首张）</p>
+                <p class="mb-2 text-sm font-medium text-slate-700">源发票预览</p>
                 <div class="rounded-xl bg-slate-50 p-3">
                   <img
                     v-if="selected.source_preview_image_url || selected.preview_image_url"
                     :src="`${apiBase}${selected.source_preview_image_url ?? selected.preview_image_url}`"
                     alt="source invoice preview"
-                    class="max-h-[60vh] w-full object-contain"
+                    class="max-h-[60vh] w-full cursor-pointer object-contain transition-transform hover:scale-[1.02]"
+                    @click="openImagePreview(`${apiBase}${selected.source_preview_image_url ?? selected.preview_image_url}`, '源发票预览')"
                   />
-                  <p v-else class="text-xs text-slate-500">暂无源发票预览图</p>
+                  <p v-else class="text-xs text-slate-500">暂无预览图</p>
                 </div>
               </div>
               <div>
-                <p class="mb-2 text-sm font-medium text-slate-700">归档发票预览（首张）</p>
+                <p class="mb-2 text-sm font-medium text-slate-700">归档发票预览</p>
                 <div class="rounded-xl bg-slate-50 p-3">
                   <img
                     v-if="selected.archive_preview_image_url || selected.preview_image_url"
                     :src="`${apiBase}${selected.archive_preview_image_url ?? selected.preview_image_url}`"
                     alt="archived invoice preview"
-                    class="max-h-[60vh] w-full object-contain"
+                    class="max-h-[60vh] w-full cursor-pointer object-contain transition-transform hover:scale-[1.02]"
+                    @click="openImagePreview(`${apiBase}${selected.archive_preview_image_url ?? selected.preview_image_url}`, '归档发票预览')"
                   />
-                  <p v-else class="text-xs text-slate-500">暂无归档发票预览图</p>
+                  <p v-else class="text-xs text-slate-500">暂无预览图</p>
                 </div>
               </div>
             </div>
@@ -272,18 +300,18 @@ onMounted(loadData);
 
     <div v-if="approvalDialogOpen" class="fixed inset-0 z-[60] bg-black/30 p-4" @click.self="approvalDialogOpen = false">
       <div class="mx-auto mt-24 max-w-md rounded-2xl bg-white p-6 shadow-xl">
-        <h3 class="mb-4 text-lg font-semibold text-slate-800">审批发票</h3>
+        <h3 class="mb-4 text-lg font-semibold text-slate-800">审批操作</h3>
         <div class="space-y-4">
           <div>
             <label class="mb-1 block text-sm text-slate-600">审批结果</label>
             <div class="flex gap-4">
               <label class="flex items-center gap-2">
                 <input type="radio" v-model="approvalForm.status" value="approved" />
-                <span>批准</span>
+                <span>批准通过</span>
               </label>
               <label class="flex items-center gap-2">
                 <input type="radio" v-model="approvalForm.status" value="rejected" />
-                <span>拒绝</span>
+                <span>拒绝驳回</span>
               </label>
             </div>
           </div>
@@ -292,16 +320,16 @@ onMounted(loadData);
             <input
               v-model="approvalForm.approverName"
               type="text"
-              placeholder="请输入审批人姓名"
+              placeholder="请输入您的姓名"
               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
             />
           </div>
           <div>
-            <label class="mb-1 block text-sm text-slate-600">备注（可选）</label>
+            <label class="mb-1 block text-sm text-slate-600">备注说明（可选）</label>
             <textarea
               v-model="approvalForm.comment"
               rows="3"
-              placeholder="可选的审批备注"
+              placeholder="如有特殊情况，请在此说明"
               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
             ></textarea>
           </div>
@@ -317,11 +345,27 @@ onMounted(loadData);
               :disabled="approvalLoading"
               @click="submitApproval"
             >
-              {{ approvalLoading ? "提交中..." : "确认提交" }}
+              {{ approvalLoading ? "提交中..." : "确认审批" }}
             </button>
           </div>
         </div>
       </div>
+    </div>
+
+    <div v-if="imagePreviewOpen" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4" @click.self="closeImagePreview">
+      <button
+        class="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/30 transition-colors"
+        @click="closeImagePreview"
+      >
+        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+      <img
+        :src="imagePreviewSrc"
+        :alt="imagePreviewAlt"
+        class="max-h-[90vh] max-w-[90vw] rounded-lg shadow-2xl object-contain"
+      />
     </div>
   </section>
 </template>

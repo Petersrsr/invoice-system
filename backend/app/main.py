@@ -24,7 +24,6 @@ _SQLITE_EXTRA_COLUMNS: dict[str, str] = {
 
 
 def _ensure_sqlite_columns() -> None:
-    # 兼容历史 SQLite：在旧库缺少新增字段时自动补齐。
     if not settings.database_url.startswith("sqlite:///"):
         return
     db_path = settings.database_url.replace("sqlite:///", "", 1)
@@ -35,6 +34,8 @@ def _ensure_sqlite_columns() -> None:
         for col, col_type in _SQLITE_EXTRA_COLUMNS.items():
             if col not in existing:
                 conn.execute(f"ALTER TABLE invoice_records ADD COLUMN {col} {col_type}")
+        if "approval_status" in existing:
+            conn.execute("UPDATE invoice_records SET approval_status = 'pending' WHERE approval_status IS NULL")
         conn.commit()
     finally:
         conn.close()

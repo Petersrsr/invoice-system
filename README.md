@@ -1,16 +1,19 @@
 # 企业自动化发票报销系统
 
-一个面向企业内部的自动化发票报销系统，支持发票上传、智能解析、归档管理和审批流程。
+一个面向企业内部的自动化发票报销系统，支持发票上传、智能解析、草稿编辑、归档管理、审批流程和统计报表。
 
 ## 功能特性
 
-- **发票上传**：支持拖拽上传 PDF 发票文件
-- **智能解析**：使用 LLM 自动提取发票字段（金额、日期、抬头、税号、品名等）
+- **发票上传**：支持拖拽上传 PDF 发票文件（最大 10MB）
+- **智能解析**：使用 LLM 自动提取发票字段（金额、日期、销售方、税号、品名等）
+- **草稿机制**：上传后为草稿状态，支持修改信息后重新上传，不触发去重
+- **确认提交**：草稿确认后进入待审批状态
 - **自动归档**：按规则命名并存储源文件和归档文件
-- **去重策略**：检测重复发票号，覆盖旧文件并更新记录
-- **预览查看**：支持源文件下载、归档文件下载、预览图查看
+- **去重策略**：正式提交时检测重复发票号，覆盖旧文件并更新记录
+- **预览查看**：支持源文件下载、归档文件下载、预览图查看和放大预览
 - **审批流程**：发票审批状态管理（待审批/已批准/已拒绝）
-- **统计报表**：发票数量、金额汇总、审批状态统计
+- **彻底删除**：删除发票时同时删除数据库记录和所有相关文件
+- **统计报表**：发票数量、金额汇总、审批状态统计、用途分布、报销排行
 
 ## 技术栈
 
@@ -19,9 +22,9 @@
 - FastAPI 0.100+
 - SQLAlchemy 2.0+
 - Pydantic 2.0+
-- PyMuPDF (PDF 解析)
-- httpx (HTTP 客户端)
-- SQLite (数据库)
+- PyMuPDF（PDF 解析）
+- httpx（HTTP 客户端）
+- SQLite（数据库）
 
 ### 前端
 - Vue 3 + Vite 5
@@ -86,7 +89,7 @@ docker-compose up -d
 
 #### 3. 访问地址
 
-- 前端：http://服务器IP
+- 前端：http://服务器IP:80
 - 后端 API：http://服务器IP:8000
 
 ## 项目结构
@@ -121,7 +124,6 @@ invoice-system/
 │   ├── src/                    # 源代码
 │   │   ├── main.ts             # 入口文件
 │   │   ├── App.vue             # 根组件
-│   │   ├── router.ts           # 路由配置
 │   │   ├── api/                # API 调用
 │   │   │   └── invoice.ts      # 发票 API
 │   │   ├── components/         # UI 组件
@@ -143,36 +145,65 @@ invoice-system/
 
 ## API 接口文档
 
-### 发票列表
+### 1. 上传发票
 
-- **GET** `/api/invoices`
-- 获取发票列表
+- **POST** `/api/invoices/upload`
+- 上传 PDF 发票文件
 
-**查询参数：**
+**请求体：** `multipart/form-data`
+
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| page | int | 页码，默认 0 |
-| size | int | 每页数量，默认 20 |
+| file | File | PDF 文件 |
+| uploader_name | string | 上传人姓名（必填） |
+| draft | boolean | 是否为草稿模式，默认 true（草稿模式跳过去重） |
 
 **返回示例：**
 ```json
 {
-  "items": [
-    {
-      "id": 1,
-      "file_name": "矢吉-上海罗森-食品-100.00元-12345678.pdf",
-      "amount": 100.0,
-      "invoice_date": "2026-04-01",
-      "approval_status": "pending"
-    }
-  ],
-  "total": 10,
-  "page": 0,
-  "size": 20
+  "id": 1,
+  "file_name": "矢吉-上海罗森-食品-100.00元-12345678.pdf",
+  "uploader_name": "张三",
+  "replaced": false,
+  "message": "上传成功，已完成解析",
+  "extracted": {
+    "amount": 100.0,
+    "date": "2026-04-01",
+    "seller_name": "上海罗森便利有限公司",
+    "purpose": "食品",
+    "invoice_number": "12345678",
+    "tax_id": "91310109XXXXXXXXX",
+    "title": "上海罗森便利有限公司",
+    "item_name": "食品"
+  }
 }
 ```
 
-### 发票详情
+### 2. 发票列表
+
+- **GET** `/api/invoices`
+- 获取发票列表（按 id 倒序）
+
+**返回示例：**
+```json
+[
+  {
+    "id": 1,
+    "file_name": "矢吉-上海罗森-食品-100.00元-12345678.pdf",
+    "uploader_name": "张三",
+    "amount": 100.0,
+    "invoice_date": "2026-04-01",
+    "seller_name": "上海罗森便利有限公司",
+    "purpose": "食品",
+    "invoice_number": "12345678",
+    "tax_id": "91310109XXXXXXXXX",
+    "approval_status": "pending",
+    "created_at": "2026-04-27T10:00:00"
+  }
+]
+```
+
+### 3. 发票详情
 
 - **GET** `/api/invoices/{invoice_id}`
 - 获取单条发票详情
@@ -191,37 +222,47 @@ invoice-system/
   "tax_id": "91310109XXXXXXXXX",
   "source_file_url": "/files/source/xxx.pdf",
   "archived_file_url": "/files/archive/xxx.pdf",
+  "source_preview_image_url": "/files/preview/1-source.png",
+  "archive_preview_image_url": "/files/preview/1-archive.png",
   "approval_status": "pending",
   "approval_comment": null,
   "approver_name": null,
-  "approved_at": null
+  "approved_at": null,
+  "created_at": "2026-04-27T10:00:00"
 }
 ```
 
-### 上传发票
+### 4. 确认提交
 
-- **POST** `/api/invoices/upload`
-- 上传 PDF 发票文件
-
-**请求体：** `multipart/form-data`
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| file | File | PDF 文件 |
-| uploader_name | string | 上传人姓名（可选） |
+- **POST** `/api/invoices/{invoice_id}/confirm`
+- 将草稿确认为正式记录，进入待审批状态
 
 **返回示例：**
 ```json
 {
   "id": 1,
   "file_name": "矢吉-上海罗森-食品-100.00元-12345678.pdf",
-  "invoice_number": "12345678",
-  "amount": 100.0,
-  "duplicate": false
+  "uploader_name": "张三",
+  "replaced": false,
+  "message": "提交成功",
+  "extracted": {...}
 }
 ```
 
-### 审批发票
+### 5. 取消草稿
+
+- **DELETE** `/api/invoices/{invoice_id}/cancel`
+- 取消并删除草稿记录
+
+**返回示例：**
+```json
+{
+  "status": "ok",
+  "message": "已取消并删除草稿"
+}
+```
+
+### 6. 审批发票
 
 - **POST** `/api/invoices/{invoice_id}/approve`
 - 审批发票（批准或拒绝）
@@ -237,7 +278,7 @@ invoice-system/
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| status | string | 审批状态：approved 或 rejected |
+| status | string | 审批状态：`approved` 或 `rejected` |
 | comment | string | 审批备注（可选） |
 | approver_name | string | 审批人姓名（必填） |
 
@@ -248,16 +289,31 @@ invoice-system/
   "approval_status": "approved",
   "approval_comment": "审批通过",
   "approver_name": "李四",
-  "approved_at": "2026-04-27T10:00:00"
+  "approved_at": "2026-04-27T10:30:00"
 }
 ```
 
-### 删除发票
+### 7. 删除发票
 
-- **DELETE** `/api/invoices/{invoice_id}`
-- 删除发票记录及相关文件
+- **DELETE** `/api/invoices/{invoice_id}/delete`
+- 彻底删除发票记录及所有相关文件
 
-### 健康检查
+**删除内容：**
+- 数据库记录
+- 源文件 (source_files/)
+- 归档文件 (archives/)
+- 预览图片 (previews/)
+- 元数据文件 (meta/)
+
+**返回示例：**
+```json
+{
+  "status": "ok",
+  "message": "已彻底删除发票记录及所有相关文件"
+}
+```
+
+### 8. 健康检查
 
 - **GET** `/health`
 - 服务健康检查
@@ -297,7 +353,7 @@ invoice-system/
 | file_name | VARCHAR(255) | 归档文件名 |
 | source_file_name | VARCHAR(255) | 源文件名 |
 | archived_file_name | VARCHAR(255) | 归档文件名 |
-| invoice_number | VARCHAR(128) | 发票号码 |
+| invoice_number | VARCHAR(128) | 发票号码（已建索引） |
 | uploader_name | VARCHAR(128) | 上传人姓名 |
 | amount | FLOAT | 金额 |
 | invoice_date | VARCHAR(50) | 发票日期 |
@@ -305,11 +361,21 @@ invoice-system/
 | tax_id | VARCHAR(64) | 税号 |
 | item_name | VARCHAR(255) | 商品名称/用途 |
 | raw_text | TEXT | 原始文本（审计用） |
-| created_at | TIMESTAMP | 创建时间 |
-| approval_status | VARCHAR(32) | 审批状态 |
+| created_at | TIMESTAMP | 创建时间（已建索引） |
+| approval_status | VARCHAR(32) | 审批状态（已建索引）：pending/approved/rejected |
 | approval_comment | TEXT | 审批备注 |
 | approver_name | VARCHAR(128) | 审批人 |
 | approved_at | TIMESTAMP | 审批时间 |
+
+### 数据库索引
+
+| 索引名称 | 字段 | 用途 |
+|----------|------|------|
+| idx_invoice_number | invoice_number | 发票号去重查询 |
+| idx_uploader_name | uploader_name | 上传人统计筛选 |
+| idx_approval_status | approval_status | 审批状态筛选 |
+| idx_created_at | created_at | 时间排序查询 |
+| idx_status_date | approval_status, created_at | 组合条件查询 |
 
 ## 发票归档命名规则
 
@@ -324,6 +390,34 @@ invoice-system/
 矢吉-上海罗森便利有限公司-食品-100.00元-26317000000980499812.pdf
 ```
 
+## 业务流程
+
+### 发票上传流程
+
+```
+1. 员工上传 PDF 发票
+   ↓
+2. 系统解析 PDF，提取发票信息（LLM 智能解析）
+   ↓
+3. 保存为草稿状态（draft=true，不触发去重）
+   ↓
+4. 员工确认信息正确后提交
+   ↓
+5. 系统检测发票号是否重复
+   ├── 不重复 → 进入待审批状态
+   └── 重复 → 覆盖旧文件并更新记录
+   ↓
+6. 会计审批（批准/拒绝）
+```
+
+### 审批状态说明
+
+| 状态 | 说明 | 可见页面 |
+|------|------|----------|
+| pending | 待审批 | 仅会计端可见审批按钮 |
+| approved | 已批准 | 所有人可见 |
+| rejected | 已拒绝 | 所有人可见 |
+
 ## 开发指南
 
 ### 代码规范
@@ -332,12 +426,10 @@ invoice-system/
 - TypeScript：使用 ESLint 检查
 - 提交信息：使用 Conventional Commits 格式
 
-### 开发流程
+### 调试模式
 
-1. 创建功能分支
-2. 编写代码
-3. 测试验证
-4. 提交 PR
+- 后端：`--reload` 启用代码热重载
+- 前端：`npm run dev` 默认启用热更新
 
 ### 测试
 

@@ -9,7 +9,8 @@ const invoices = ref<InvoiceRecord[]>([]);
 const selected = ref<InvoiceDetail | null>(null);
 const detailOpen = ref(false);
 const detailLoading = ref(false);
-const apiBase = (import.meta.env.VITE_API_ORIGIN as string | undefined) ?? "http://127.0.0.1:8000";
+const defaultApiOrigin = `${window.location.protocol}//${window.location.hostname}:8000`;
+const apiBase = (import.meta.env.VITE_API_ORIGIN as string | undefined) ?? defaultApiOrigin;
 
 const totalAmount = computed(() =>
   invoices.value.reduce((sum, row) => sum + (row.amount ?? 0), 0),

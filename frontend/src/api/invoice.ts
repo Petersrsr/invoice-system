@@ -1,8 +1,9 @@
 import axios from "axios";
 import type { InvoiceDetail, InvoiceRecord, UploadInvoiceResponse } from "../types/invoice";
 
-// 前端统一 API 基址，默认指向本地 FastAPI 服务。
-const apiBase = (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://127.0.0.1:8000/api";
+// 默认跟随当前访问主机，避免局域网访问时落到访问者本机的 127.0.0.1。
+const defaultApiBase = `${window.location.protocol}//${window.location.hostname}:8000/api`;
+const apiBase = (import.meta.env.VITE_API_BASE as string | undefined) ?? defaultApiBase;
 
 const http = axios.create({
   baseURL: apiBase,

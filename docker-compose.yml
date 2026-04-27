@@ -1,0 +1,36 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: invoice-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/source_files:/app/source_files
+      - ./backend/archives:/app/archives
+      - ./backend/previews:/app/previews
+      - ./backend/meta:/app/meta
+      - ./backend/invoice.db:/app/invoice.db
+    environment:
+      - APP_ENV=production
+      - LLM_API_BASE=${LLM_API_BASE:-https://api.deepseek.com}
+      - LLM_API_KEY=${LLM_API_KEY:-your-api-key}
+      - LLM_MODEL=${LLM_MODEL:-deepseek-chat}
+      - DATABASE_URL=sqlite:///./invoice.db
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: invoice-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+networks:
+  default:
+    name: invoice-network

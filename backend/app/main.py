@@ -16,6 +16,10 @@ _SQLITE_EXTRA_COLUMNS: dict[str, str] = {
     "archived_file_name": "VARCHAR(255)",
     "invoice_number": "VARCHAR(128)",
     "uploader_name": "VARCHAR(128)",
+    "approval_status": "VARCHAR(32)",
+    "approval_comment": "TEXT",
+    "approver_name": "VARCHAR(128)",
+    "approved_at": "TIMESTAMP",
 }
 
 

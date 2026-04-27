@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 
-import { fetchInvoiceDetail, fetchInvoices } from "../api/invoice";
+import { approveInvoice, fetchInvoiceDetail, fetchInvoices } from "../api/invoice";
 import InvoiceTable from "../components/InvoiceTable.vue";
 import type { InvoiceDetail, InvoiceRecord } from "../types/invoice";
 
@@ -9,12 +9,19 @@ const invoices = ref<InvoiceRecord[]>([]);
 const selected = ref<InvoiceDetail | null>(null);
 const detailOpen = ref(false);
 const detailLoading = ref(false);
+const approvalLoading = ref(false);
+const approvalDialogOpen = ref(false);
+const approvalForm = ref({ status: "approved" as "approved" | "rejected", comment: "", approverName: "" });
 const defaultApiOrigin = `${window.location.protocol}//${window.location.hostname}:8000`;
 const apiBase = (import.meta.env.VITE_API_ORIGIN as string | undefined) ?? defaultApiOrigin;
 
 const totalAmount = computed(() =>
   invoices.value.reduce((sum, row) => sum + (row.amount ?? 0), 0),
 );
+
+const pendingCount = computed(() => invoices.value.filter(i => i.approval_status === "pending").length);
+const approvedCount = computed(() => invoices.value.filter(i => i.approval_status === "approved").length);
+const rejectedCount = computed(() => invoices.value.filter(i => i.approval_status === "rejected").length);
 
 const purposeStats = computed(() => {
   const bucket = new Map<string, number>();
@@ -69,6 +76,30 @@ function closeDetail() {
   detailOpen.value = false;
 }
 
+function openApprovalDialog() {
+  approvalForm.value = { status: "approved", comment: "", approverName: "" };
+  approvalDialogOpen.value = true;
+}
+
+async function submitApproval() {
+  if (!selected.value || !approvalForm.value.approverName.trim()) {
+    alert("请填写审批人姓名");
+    return;
+  }
+  approvalLoading.value = true;
+  try {
+    await approveInvoice(selected.value.id, approvalForm.value);
+    approvalDialogOpen.value = false;
+    selected.value = await fetchInvoiceDetail(selected.value.id);
+    await loadData();
+    alert("审批提交成功");
+  } catch (err) {
+    alert("审批提交失败");
+  } finally {
+    approvalLoading.value = false;
+  }
+}
+
 onMounted(loadData);
 </script>
 
@@ -94,9 +125,9 @@ onMounted(loadData);
         <p class="mt-1 text-2xl font-semibold text-slate-800">{{ totalAmount.toFixed(2) }}</p>
       </div>
       <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <p class="text-xs text-slate-500">平均每张（元）</p>
+        <p class="text-xs text-slate-500">待审批 / 已批准 / 已拒绝</p>
         <p class="mt-1 text-2xl font-semibold text-slate-800">
-          {{ invoices.length === 0 ? "0.00" : (totalAmount / invoices.length).toFixed(2) }}
+          {{ pendingCount }} / {{ approvedCount }} / {{ rejectedCount }}
         </p>
       </div>
     </div>
@@ -143,7 +174,16 @@ onMounted(loadData);
       <div class="mx-auto mt-16 max-h-[80vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-xl">
         <div class="flex items-center justify-between border-b px-5 py-4">
           <h3 class="text-lg font-semibold text-slate-800">发票详情</h3>
-          <button class="rounded px-3 py-1 text-slate-500 hover:bg-slate-100" @click="closeDetail">关闭</button>
+          <div class="flex items-center gap-2">
+            <button
+              v-if="selected.approval_status === 'pending'"
+              class="rounded bg-indigo-600 px-4 py-1.5 text-sm text-white hover:bg-indigo-700"
+              @click="openApprovalDialog"
+            >
+              审批
+            </button>
+            <button class="rounded px-3 py-1 text-slate-500 hover:bg-slate-100" @click="closeDetail">关闭</button>
+          </div>
         </div>
 
         <div class="max-h-[calc(80vh-64px)] overflow-y-auto p-5">
@@ -159,6 +199,24 @@ onMounted(loadData);
               <p><span class="text-slate-500">发票号码：</span>{{ selected.invoice_number ?? "-" }}</p>
               <p><span class="text-slate-500">税号：</span>{{ selected.tax_id ?? "-" }}</p>
               <p><span class="text-slate-500">入库时间：</span>{{ selected.created_at }}</p>
+              <p>
+                <span class="text-slate-500">审批状态：</span>
+                <span
+                  class="rounded px-2 py-0.5 text-xs font-medium"
+                  :class="{
+                    'bg-yellow-100 text-yellow-700': selected.approval_status === 'pending',
+                    'bg-green-100 text-green-700': selected.approval_status === 'approved',
+                    'bg-red-100 text-red-700': selected.approval_status === 'rejected',
+                  }"
+                >
+                  {{ selected.approval_status === 'pending' ? '待审批' : selected.approval_status === 'approved' ? '已批准' : '已拒绝' }}
+                </span>
+              </p>
+              <template v-if="selected.approval_status !== 'pending'">
+                <p><span class="text-slate-500">审批人：</span>{{ selected.approver_name ?? '-' }}</p>
+                <p><span class="text-slate-500">审批时间：</span>{{ selected.approved_at ?? '-' }}</p>
+                <p v-if="selected.approval_comment"><span class="text-slate-500">审批备注：</span>{{ selected.approval_comment }}</p>
+              </template>
               <p>
                 <span class="text-slate-500">源文件：</span>
                 <a
@@ -207,6 +265,60 @@ onMounted(loadData);
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="approvalDialogOpen" class="fixed inset-0 z-[60] bg-black/30 p-4" @click.self="approvalDialogOpen = false">
+      <div class="mx-auto mt-24 max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <h3 class="mb-4 text-lg font-semibold text-slate-800">审批发票</h3>
+        <div class="space-y-4">
+          <div>
+            <label class="mb-1 block text-sm text-slate-600">审批结果</label>
+            <div class="flex gap-4">
+              <label class="flex items-center gap-2">
+                <input type="radio" v-model="approvalForm.status" value="approved" />
+                <span>批准</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="radio" v-model="approvalForm.status" value="rejected" />
+                <span>拒绝</span>
+              </label>
+            </div>
+          </div>
+          <div>
+            <label class="mb-1 block text-sm text-slate-600">审批人姓名</label>
+            <input
+              v-model="approvalForm.approverName"
+              type="text"
+              placeholder="请输入审批人姓名"
+              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+            />
+          </div>
+          <div>
+            <label class="mb-1 block text-sm text-slate-600">备注（可选）</label>
+            <textarea
+              v-model="approvalForm.comment"
+              rows="3"
+              placeholder="可选的审批备注"
+              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+            ></textarea>
+          </div>
+          <div class="flex justify-end gap-2">
+            <button
+              class="rounded px-4 py-2 text-sm text-slate-600 hover:bg-slate-100"
+              @click="approvalDialogOpen = false"
+            >
+              取消
+            </button>
+            <button
+              class="rounded bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
+              :disabled="approvalLoading"
+              @click="submitApproval"
+            >
+              {{ approvalLoading ? "提交中..." : "确认提交" }}
+            </button>
           </div>
         </div>
       </div>

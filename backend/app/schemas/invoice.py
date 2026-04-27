@@ -35,6 +35,7 @@ class InvoiceListItem(BaseModel):
     tax_id: str | None
     item_name: str | None
     created_at: str
+    approval_status: str = "pending"
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -58,3 +59,21 @@ class InvoiceDetailResponse(BaseModel):
     preview_image_url: str | None
     raw_text: str | None
     created_at: str
+    approval_status: str = "pending"
+    approval_comment: str | None = None
+    approver_name: str | None = None
+    approved_at: str | None = None
+
+
+class ApprovalRequest(BaseModel):
+    status: str
+    comment: str | None = None
+    approver_name: str
+
+
+class ApprovalResponse(BaseModel):
+    id: int
+    approval_status: str
+    approval_comment: str | None
+    approver_name: str | None
+    approved_at: str | None

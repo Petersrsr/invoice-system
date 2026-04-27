@@ -4,7 +4,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.database import Base
 
 
-# 发票主表：保存解析结果、文件映射与审计原文。
 class InvoiceRecord(Base):
     __tablename__ = "invoice_records"
 
@@ -21,3 +20,7 @@ class InvoiceRecord(Base):
     item_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    approval_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    approval_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    approver_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    approved_at: Mapped[str | None] = mapped_column(DateTime(timezone=True), nullable=True)

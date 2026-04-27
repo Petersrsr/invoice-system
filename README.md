@@ -1,526 +1,407 @@
-# 企业自动化发票报销系统（MVP）交接文档
+# 企业自动化发票报销系统
 
-一个面向企业内部的自动化发票报销系统：上传 PDF 后自动提取字段、完成归档与入库，并在前端列表/详情页可追溯查看。
+一个面向企业内部的自动化发票报销系统，支持发票上传、智能解析、归档管理和审批流程。
 
-## 1. 项目背景（最初需求）
+## 功能特性
 
-本项目最初需求如下（保留原意）：
+- **发票上传**：支持拖拽上传 PDF 发票文件
+- **智能解析**：使用 LLM 自动提取发票字段（金额、日期、抬头、税号、品名等）
+- **自动归档**：按规则命名并存储源文件和归档文件
+- **去重策略**：检测重复发票号，覆盖旧文件并更新记录
+- **预览查看**：支持源文件下载、归档文件下载、预览图查看
+- **审批流程**：发票审批状态管理（待审批/已批准/已拒绝）
+- **统计报表**：发票数量、金额汇总、审批状态统计
 
-- 开发企业内部自动化发票报销系统。
-- 后端：Python FastAPI，集成 PDF 解析（PyMuPDF）并调用外部大模型 API（DeepSeek/Claude 兼容 Chat Completions）。
-- 前端：Vue3（Vite）+ Tailwind CSS，极简风格。
-- 数据库：SQLite（MVP 阶段）。
-- 核心流：
-  - 用户页：大拖拽上传框，支持 PDF。
-  - 链路：上传 -> PDF 文本提取 -> LLM 解析（金额/日期/抬头/税号/品名等）-> JSON。
-  - 管理页：会计查看解析后的汇总列表。
+## 技术栈
 
-## 2. 当前实现范围
+### 后端
+- Python 3.11+
+- FastAPI 0.100+
+- SQLAlchemy 2.0+
+- Pydantic 2.0+
+- PyMuPDF (PDF 解析)
+- httpx (HTTP 客户端)
+- SQLite (数据库)
 
-已完成能力：
+### 前端
+- Vue 3 + Vite 5
+- TypeScript
+- Tailwind CSS 3
+- Axios
+- Vue Router
 
-- PDF 上传与后端解析链路。
-- LLM 字段提取 + 正则兜底修正。
-- 发票归档命名：`矢吉-{销售方名称}-{用途}-{金额}元-{发票号码}.pdf`。
-- 源文件与归档文件双落盘。
-- 发票详情页支持：
-  - 源文件下载。
-  - 归档文件下载。
-  - 源发票预览图（首张）。
-  - 归档发票预览图（首张）。
-- 审计留存目录：`source_files`、`archives`、`previews`、`meta`。
-- 发票号去重策略：检测重复时覆盖旧文件并更新原记录，前端弹窗提示。
-- LLM 提示词已预设企业主体信息（公司名称、开户行、账号、统一社会信用代码）作为解析背景上下文。
-- 提供 `systemd` 常驻部署文件，服务监听 `0.0.0.0`。
+## 快速开始
 
-## 3. 技术栈
+### 环境要求
 
-- 后端：FastAPI + SQLAlchemy + Pydantic + PyMuPDF + httpx
-- 前端：Vue3 + Vite + TypeScript + Tailwind CSS + Axios
-- 存储：SQLite（`backend/invoice.db`）
+- Python 3.11+
+- Node.js 20+
+- npm 或 yarn
 
-## 4. 目录结构（关键路径）
+### 开发模式
 
-```text
-invoice-system/
-├─ backend/
-│  ├─ app/
-│  │  ├─ main.py
-│  │  ├─ core/config.py
-│  │  ├─ db/
-│  │  │  ├─ database.py
-│  │  │  └─ models.py
-│  │  ├─ api/routes/invoices.py
-│  │  ├─ schemas/invoice.py
-│  │  └─ services/
-│  │     ├─ pdf_parser.py
-│  │     ├─ llm_client.py
-│  │     └─ invoice_service.py
-│  ├─ requirements.txt
-│  ├─ .env.example
-│  ├─ invoice.db
-│  ├─ source_files/   # 源发票
-│  ├─ archives/       # 归档发票
-│  ├─ previews/       # 预览图
-│  └─ meta/           # 预览元信息
-├─ frontend/
-│  ├─ src/
-│  │  ├─ App.vue
-│  │  ├─ api/invoice.ts
-│  │  ├─ components/InvoiceUpload.vue
-│  │  ├─ components/InvoiceTable.vue
-│  │  ├─ types/invoice.ts
-│  │  └─ env.d.ts
-│  ├─ package.json
-│  └─ .env.example
-├─ deploy/
-   ├─ start_backend.sh
-   ├─ start_frontend.sh
-   └─ systemd/
-      ├─ invoice-backend.service
-      └─ invoice-frontend.service
-└─ scripts/
-   └─ clean_test_data.sh
+#### 1. 克隆项目
+
+```bash
+git clone <repository-url>
+cd invoice-system
 ```
 
+#### 2. 后端启动
 
-## 5. 核心业务流程
+```bash
+cd backend
+pip install -r requirements.txt
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
 
-1. 前端上传 PDF 到 `POST /api/invoices/upload`。
-2. 后端 `pdf_parser.extract_text_from_pdf()` 提取全文文本。
-3. `llm_client.parse_invoice_with_llm()` 请求外部模型，尝试返回 JSON 字段。
-4. `invoice_service.normalize_extracted_fields()` 使用规则兜底（日期、发票号、金额、用途归类）。
-5. 去重判断：
-   - 若 `invoice_number` 命中已有记录：覆盖旧源文件/归档文件，更新原记录。
-   - 若未命中：创建新记录并写入新文件。
-6. 生成预览图（首张）并写入 `meta/{id}.json`。
-7. 前端列表展示汇总，点击行进入详情并查看文件链接与预览图。
+#### 3. 前端启动
 
-## 6. 去重策略（当前行为）
+```bash
+cd frontend
+npm install
+npm run dev -- --host 0.0.0.0 --port 5173
+```
 
-- 判定键：发票号 `invoice_number`。
-- 命中后行为：覆盖旧文件 + 更新旧记录（不新增记录）。
-- 前端反馈：显示并弹窗 `检测到重复发票号，已覆盖旧文件并更新记录`。
+#### 4. 访问地址
 
-注意：
+- 前端：http://localhost:5173
+- 后端 API：http://localhost:8000
+- Swagger 文档：http://localhost:8000/docs
 
-- 如果 LLM 错提取了发票号，可能出现“误判重复”。这是当前设计已知风险，建议后续升级为复合键策略（如 `发票号 + 税号`）。
+### Docker 部署（推荐）
 
-## 7. API 说明（MVP）
+#### 1. 配置环境变量
 
-基础约定：
+```bash
+cp .env.docker .env
+# 编辑 .env 文件，配置 LLM API Key
+```
 
-- 基础路径：`/api/invoices`
-- 响应格式：JSON
-- 编码：UTF-8
-- 鉴权：当前 MVP 暂无鉴权（仅建议内网使用）
+#### 2. 启动服务
 
-### 7.1 上传发票
+```bash
+docker-compose up -d
+```
 
-- `POST /api/invoices/upload`
-- `multipart/form-data` 字段：`file`、`uploader_name`（必填）
-- 仅支持：`application/pdf` / `application/x-pdf`
-- 主要行为：
-  - 成功解析后写入数据库与文件目录。
-  - 命中重复发票号时，覆盖旧文件并更新原记录。
+#### 3. 访问地址
 
-成功返回（示例）：
+- 前端：http://服务器IP
+- 后端 API：http://服务器IP:8000
 
+## 项目结构
+
+```
+invoice-system/
+├── backend/                    # 后端服务
+│   ├── app/                    # 应用代码
+│   │   ├── main.py             # 入口文件
+│   │   ├── core/               # 核心配置
+│   │   │   └── config.py       # 配置管理
+│   │   ├── db/                 # 数据库相关
+│   │   │   ├── database.py     # 数据库连接
+│   │   │   └── models.py       # 数据模型
+│   │   ├── api/                # API 路由
+│   │   │   └── routes/         # 路由定义
+│   │   │       └── invoices.py # 发票相关 API
+│   │   ├── schemas/            # Pydantic 模型
+│   │   │   └── invoice.py      # 发票数据结构
+│   │   └── services/           # 业务服务
+│   │       ├── pdf_parser.py   # PDF 解析服务
+│   │       ├── llm_client.py   # LLM 客户端
+│   │       └── invoice_service.py # 发票业务逻辑
+│   ├── requirements.txt         # Python 依赖
+│   ├── Dockerfile              # 后端 Docker 配置
+│   ├── invoice.db              # SQLite 数据库文件
+│   ├── source_files/           # 源发票文件存储
+│   ├── archives/               # 归档发票文件存储
+│   ├── previews/               # 预览图存储
+│   └── meta/                   # 元信息存储
+├── frontend/                   # 前端应用
+│   ├── src/                    # 源代码
+│   │   ├── main.ts             # 入口文件
+│   │   ├── App.vue             # 根组件
+│   │   ├── router.ts           # 路由配置
+│   │   ├── api/                # API 调用
+│   │   │   └── invoice.ts      # 发票 API
+│   │   ├── components/         # UI 组件
+│   │   │   ├── InvoiceUpload.vue    # 上传组件
+│   │   │   └── InvoiceTable.vue     # 表格组件
+│   │   ├── views/              # 页面视图
+│   │   │   ├── EmployeePage.vue     # 员工上传页
+│   │   │   └── AccountantPage.vue   # 会计审批页
+│   │   └── types/              # TypeScript 类型
+│   │       └── invoice.ts      # 发票类型定义
+│   ├── package.json            # npm 依赖
+│   ├── Dockerfile              # 前端 Docker 配置
+│   ├── nginx.conf              # Nginx 配置
+│   └── vite.config.ts          # Vite 配置
+├── docker-compose.yml          # Docker Compose 配置
+├── .env.docker                 # Docker 环境变量模板
+└── README.md                   # 项目说明文档
+```
+
+## API 接口文档
+
+### 发票列表
+
+- **GET** `/api/invoices`
+- 获取发票列表
+
+**查询参数：**
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| page | int | 页码，默认 0 |
+| size | int | 每页数量，默认 20 |
+
+**返回示例：**
 ```json
 {
-  "id": 11,
-  "file_name": "矢吉-上海恭汇贸易有限公司-食品-27.80元-26312000002361255451.pdf",
-  "replaced": true,
-  "message": "检测到重复发票号，已覆盖旧文件并更新记录",
-  "extracted": {
-    "amount": 27.8,
-    "date": "2026-04-17",
-    "seller_name": "上海恭汇贸易有限公司",
-    "purpose": "食品",
-    "invoice_number": "26312000002361255451",
-    "tax_id": "913101097927991127",
-    "title": "上海恭汇贸易有限公司",
-    "item_name": "食品"
-  }
+  "items": [
+    {
+      "id": 1,
+      "file_name": "矢吉-上海罗森-食品-100.00元-12345678.pdf",
+      "amount": 100.0,
+      "invoice_date": "2026-04-01",
+      "approval_status": "pending"
+    }
+  ],
+  "total": 10,
+  "page": 0,
+  "size": 20
 }
 ```
 
-### 7.2 发票列表
+### 发票详情
 
-- `GET /api/invoices`
-- 返回按 `id desc` 排序。
-- 关键返回字段：
-  - `id`、`file_name`
-  - `amount`、`invoice_date`
-  - `seller_name`、`purpose`
-  - `invoice_number`、`tax_id`
-  - `created_at`
+- **GET** `/api/invoices/{invoice_id}`
+- 获取单条发票详情
 
-### 7.3 发票详情
+**返回示例：**
+```json
+{
+  "id": 1,
+  "file_name": "矢吉-上海罗森-食品-100.00元-12345678.pdf",
+  "uploader_name": "张三",
+  "amount": 100.0,
+  "invoice_date": "2026-04-01",
+  "seller_name": "上海罗森便利有限公司",
+  "purpose": "食品",
+  "invoice_number": "12345678",
+  "tax_id": "91310109XXXXXXXXX",
+  "source_file_url": "/files/source/xxx.pdf",
+  "archived_file_url": "/files/archive/xxx.pdf",
+  "approval_status": "pending",
+  "approval_comment": null,
+  "approver_name": null,
+  "approved_at": null
+}
+```
 
-- `GET /api/invoices/{invoice_id}`
-- 返回基础字段 + 文件链接 + 预览图链接：
-  - `source_file_url`
-  - `archived_file_url`
-  - `source_preview_image_url`
-  - `archive_preview_image_url`
-  - `raw_text`（用于审计或人工复核）
+### 上传发票
 
-### 7.4 健康检查
+- **POST** `/api/invoices/upload`
+- 上传 PDF 发票文件
 
-- `GET /health` -> `{"status":"ok"}`
+**请求体：** `multipart/form-data`
 
-### 7.5 常见错误码
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| file | File | PDF 文件 |
+| uploader_name | string | 上传人姓名（可选） |
 
-- `400`：文件类型不是 PDF 或文件为空。
-- `404`：发票详情 ID 不存在。
-- `500`：PDF 解析异常、LLM 调用异常、数据库读写异常等服务端错误。
+**返回示例：**
+```json
+{
+  "id": 1,
+  "file_name": "矢吉-上海罗森-食品-100.00元-12345678.pdf",
+  "invoice_number": "12345678",
+  "amount": 100.0,
+  "duplicate": false
+}
+```
 
-### 7.6 cURL 调试示例
+### 审批发票
 
-上传发票：
+- **POST** `/api/invoices/{invoice_id}/approve`
+- 审批发票（批准或拒绝）
+
+**请求体：**
+```json
+{
+  "status": "approved",
+  "comment": "审批通过",
+  "approver_name": "李四"
+}
+```
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| status | string | 审批状态：approved 或 rejected |
+| comment | string | 审批备注（可选） |
+| approver_name | string | 审批人姓名（必填） |
+
+**返回示例：**
+```json
+{
+  "id": 1,
+  "approval_status": "approved",
+  "approval_comment": "审批通过",
+  "approver_name": "李四",
+  "approved_at": "2026-04-27T10:00:00"
+}
+```
+
+### 删除发票
+
+- **DELETE** `/api/invoices/{invoice_id}`
+- 删除发票记录及相关文件
+
+### 健康检查
+
+- **GET** `/health`
+- 服务健康检查
+
+**返回示例：**
+```json
+{
+  "status": "ok"
+}
+```
+
+## 环境变量配置
+
+### 后端环境变量
+
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| APP_ENV | production | 运行环境 |
+| LLM_API_BASE | https://api.deepseek.com | LLM API 地址 |
+| LLM_API_KEY | - | LLM API Key（必填） |
+| LLM_MODEL | deepseek-chat | LLM 模型名称 |
+| DATABASE_URL | sqlite:///./invoice.db | 数据库连接地址 |
+
+### 前端环境变量
+
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| VITE_API_ORIGIN | http://localhost:8000 | 后端 API 地址 |
+
+## 数据库说明
+
+### 发票记录表 (invoice_records)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INTEGER | 主键 |
+| file_name | VARCHAR(255) | 归档文件名 |
+| source_file_name | VARCHAR(255) | 源文件名 |
+| archived_file_name | VARCHAR(255) | 归档文件名 |
+| invoice_number | VARCHAR(128) | 发票号码 |
+| uploader_name | VARCHAR(128) | 上传人姓名 |
+| amount | FLOAT | 金额 |
+| invoice_date | VARCHAR(50) | 发票日期 |
+| title | VARCHAR(255) | 销售方名称 |
+| tax_id | VARCHAR(64) | 税号 |
+| item_name | VARCHAR(255) | 商品名称/用途 |
+| raw_text | TEXT | 原始文本（审计用） |
+| created_at | TIMESTAMP | 创建时间 |
+| approval_status | VARCHAR(32) | 审批状态 |
+| approval_comment | TEXT | 审批备注 |
+| approver_name | VARCHAR(128) | 审批人 |
+| approved_at | TIMESTAMP | 审批时间 |
+
+## 发票归档命名规则
+
+归档文件命名格式：
+
+```
+{公司简称}-{销售方名称}-{用途}-{金额}元-{发票号码}.pdf
+```
+
+示例：
+```
+矢吉-上海罗森便利有限公司-食品-100.00元-26317000000980499812.pdf
+```
+
+## 开发指南
+
+### 代码规范
+
+- Python：遵循 PEP 8 规范
+- TypeScript：使用 ESLint 检查
+- 提交信息：使用 Conventional Commits 格式
+
+### 开发流程
+
+1. 创建功能分支
+2. 编写代码
+3. 测试验证
+4. 提交 PR
+
+### 测试
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/api/invoices/upload" \
-  -H "Content-Type: multipart/form-data" \
-  -F "uploader_name=张三" \
-  -F "file=@/path/to/invoice.pdf"
+# 后端测试（如有）
+cd backend
+python -m pytest
+
+# 前端测试（如有）
+cd frontend
+npm test
 ```
 
-查询列表：
+## 部署指南
+
+### Docker 部署
 
 ```bash
-curl "http://127.0.0.1:8000/api/invoices"
+# 启动服务
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+
+# 停止服务
+docker-compose down
+
+# 重新构建
+docker-compose up -d --build
 ```
 
-查询详情：
+### 手动部署
+
+#### 后端
 
 ```bash
-curl "http://127.0.0.1:8000/api/invoices/1"
-```
-
-## 8. 环境变量
-
-### 8.1 后端 `backend/.env`
-
-参考 `backend/.env.example`：
-
-```env
-APP_NAME=Invoice Reimbursement API
-APP_ENV=dev
-LLM_API_BASE=https://api.deepseek.com
-LLM_API_KEY=your-api-key
-LLM_MODEL=deepseek-chat
-DATABASE_URL=sqlite:///./invoice.db
-ARCHIVE_DIR=./archives
-SOURCE_DIR=./source_files
-PREVIEW_DIR=./previews
-META_DIR=./meta
-```
-
-### 8.2 前端 `frontend/.env`
-
-参考 `frontend/.env.example`：
-
-```env
-VITE_API_BASE=http://127.0.0.1:8000/api
-VITE_API_ORIGIN=http://127.0.0.1:8000
-```
-
-## 9. 本地开发（推荐流程）
-
-### 9.1 后端
-
-```bash
-cd /www/wwwroot/invoice-system/backend
-python3 -m venv .venv
-source .venv/bin/activate
+cd backend
 pip install -r requirements.txt
-cp .env.example .env
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-### 9.2 前端
+#### 前端
 
 ```bash
-cd /www/wwwroot/invoice-system/frontend
+cd frontend
 npm install
-cp .env.example .env
-npm run dev -- --host 0.0.0.0 --port 5173
-```
-
-### 9.3 开发校验
-
-```bash
-# backend
-cd /www/wwwroot/invoice-system/backend
-python3 -m compileall app
-
-# frontend
-cd /www/wwwroot/invoice-system/frontend
-npx tsc --noEmit
 npm run build
+npm run preview -- --host 0.0.0.0 --port 80
 ```
 
-## 10. 生产部署（systemd 常驻）
+### 数据持久化
 
-仓库内已提供：
+以下目录需要持久化存储：
 
-- `deploy/start_backend.sh`
-- `deploy/start_frontend.sh`
-- `deploy/systemd/invoice-backend.service`
-- `deploy/systemd/invoice-frontend.service`
+- `backend/source_files` - 源发票文件
+- `backend/archives` - 归档发票文件
+- `backend/previews` - 预览图
+- `backend/meta` - 元信息
+- `backend/invoice.db` - SQLite 数据库
 
-安装：
+## 许可证
 
-```bash
-sudo cp /www/wwwroot/invoice-system/deploy/systemd/invoice-backend.service /etc/systemd/system/
-sudo cp /www/wwwroot/invoice-system/deploy/systemd/invoice-frontend.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now invoice-backend
-sudo systemctl enable --now invoice-frontend
-```
+MIT License
 
-状态与日志：
+## 贡献
 
-```bash
-sudo systemctl status invoice-backend
-sudo systemctl status invoice-frontend
-sudo journalctl -u invoice-backend -f
-sudo journalctl -u invoice-frontend -f
-```
-
-端口约定：
-
-- 后端：`0.0.0.0:8000`
-- 前端预览：`0.0.0.0:80`（如使用 `npm run dev`，通常为 `5173`）
-
-### 10.1 部署教程（从 0 到可访问）
-
-以下步骤适合一台 Linux 服务器，目标目录为 `/www/wwwroot/invoice-system`。
-
-1. 拉取代码
-
-```bash
-cd /www/wwwroot
-git clone <你的仓库地址> invoice-system
-cd /www/wwwroot/invoice-system
-```
-
-2. 初始化后端环境
-
-```bash
-cd /www/wwwroot/invoice-system/backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-```
-
-编辑 `backend/.env`，至少配置以下关键项：
-
-- `LLM_API_KEY`：你的模型密钥（必填）
-- `LLM_API_BASE`：模型服务地址（默认 DeepSeek）
-- `LLM_MODEL`：模型名（如 `deepseek-chat`）
-
-3. 初始化前端环境
-
-```bash
-cd /www/wwwroot/invoice-system/frontend
-npm install
-cp .env.example .env
-```
-
-为避免 `invoice-frontend`（`www` 用户）构建时报权限错误，建议统一目录属主：
-
-```bash
-sudo chown -R www:www /www/wwwroot/invoice-system/frontend
-```
-
-如需改后端地址，编辑 `frontend/.env` 的：
-
-- `VITE_API_BASE`
-- `VITE_API_ORIGIN`
-
-4. 先做一次手工启动验证（建议）
-
-```bash
-# 终端 A：后端
-cd /www/wwwroot/invoice-system/backend
-source .venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-```bash
-# 终端 B：前端
-cd /www/wwwroot/invoice-system/frontend
-npm run dev -- --host 0.0.0.0 --port 5173
-```
-
-浏览器访问：
-
-- 前端：`http://<服务器IP>:5173`
-- 健康检查：`http://<服务器IP>:8000/health`
-
-5. 切到 systemd 常驻部署
-
-```bash
-sudo cp /www/wwwroot/invoice-system/deploy/systemd/invoice-backend.service /etc/systemd/system/
-sudo cp /www/wwwroot/invoice-system/deploy/systemd/invoice-frontend.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now invoice-backend
-sudo systemctl enable --now invoice-frontend
-```
-
-6. 检查服务状态与日志
-
-```bash
-sudo systemctl status invoice-backend
-sudo systemctl status invoice-frontend
-sudo journalctl -u invoice-backend -f
-sudo journalctl -u invoice-frontend -f
-```
-
-7. 发布后更新流程（以后每次发版）
-
-```bash
-cd /www/wwwroot/invoice-system
-git pull
-
-cd /www/wwwroot/invoice-system/backend
-source .venv/bin/activate
-pip install -r requirements.txt
-
-cd /www/wwwroot/invoice-system/frontend
-npm install
-
-sudo systemctl restart invoice-backend
-sudo systemctl restart invoice-frontend
-```
-
-8. 回滚建议（可选）
-
-- 每次更新前先打 tag 或记录 commit id。
-- 出问题时切回上一个稳定 commit，再重启两个 systemd 服务。
-
-## 11. 数据与文件说明
-
-- SQLite：`backend/invoice.db`
-- 发票主表：`invoice_records`
-- 关键字段：
-  - `id`
-  - `file_name`
-  - `source_file_name`
-  - `archived_file_name`
-  - `invoice_number`
-  - `amount`
-  - `invoice_date`
-  - `title`
-  - `tax_id`
-  - `item_name`
-  - `raw_text`
-  - `created_at`
-
-说明：
-
-- `main.py` 启动时会自动检查并补齐历史 SQLite 缺失列（兼容旧库）。
-
-## 12. 常见问题排查
-
-### 12.1 上传失败，前端提示“检查后端或 API Key”
-
-优先检查：
-
-- `LLM_API_KEY`、`LLM_API_BASE`、`LLM_MODEL` 是否有效。
-- 后端日志是否出现：
-  - LLM 请求失败（4xx/5xx/超时）。
-  - SQLite 列缺失或写入失败。
-  - PDF 解析异常。
-
-### 12.2 明明新文件却提示“重复发票号”
-
-原因：
-
-- 去重按“发票号”而非“文件名”判定。
-- 文件名不同但发票号相同，仍会覆盖更新。
-- 若 LLM 提取发票号错误，可能误判。
-
-### 12.3 预览图为空
-
-检查：
-
-- `backend/previews/`、`backend/meta/` 是否可写。
-- 上传文件是否为有效 PDF（有可渲染首页）。
-
-### 12.4 后端起不来 / 端口占用
-
-检查：
-
-- `ss -ltnp | grep 8000`
-- `sudo journalctl -u invoice-backend -n 200`
-
-## 13. 测试数据一键清理
-
-适用场景：
-
-- 联调或验收后，需要清空测试产生的发票文件与数据库记录。
-
-脚本位置：
-
-- `scripts/clean_test_data.sh`
-
-执行方式：
-
-```bash
-cd /www/wwwroot/invoice-system
-./scripts/clean_test_data.sh
-```
-
-脚本行为（幂等，可重复执行）：
-
-- 清空 `backend/previews/` 下所有文件。
-- 清空 `backend/source_files/` 下所有文件。
-- 清空 `backend/archives/` 下所有文件。
-- 清空 `backend/meta/` 下所有文件。
-- 清空数据库 `backend/invoice.db` 的 `invoice_records` 表数据。
-
-注意事项：
-
-- 该脚本会删除所有已上传发票相关文件与记录，请勿在正式生产数据上误执行。
-- 建议执行前先备份数据库：
-
-```bash
-cp /www/wwwroot/invoice-system/backend/invoice.db /www/wwwroot/invoice-system/backend/invoice.db.bak.$(date +%F-%H%M%S)
-```
-
-## 14. 安全与合规注意事项
-
-当前状态（MVP）：
-
-- CORS 仍是全开放配置，生产建议收敛白名单。
-- 尚无鉴权和权限分级。
-- LLM 请求与发票原文可能包含敏感信息，建议增加脱敏与审计策略。
-
-至少应补充：
-
-- API 鉴权（如 JWT / 内网网关鉴权）。
-- 访问日志与操作审计日志。
-- 反向代理限流与上传大小限制。
-
-## 15. 接手开发建议（下一步优先级）
-
-1. 稳定性：为上传链路添加统一异常处理与错误码映射。
-2. 精准去重：将去重键升级为复合条件（如 `发票号 + 税号`）。
-3. 安全：收紧 CORS、增加鉴权、限制静态文件访问策略。
-4. 测试：补齐 `tests/`（上传、去重、详情、预览、异常分支）。
-5. 可维护性：引入 Alembic 管理数据库迁移，替代启动时手工补列。
-
-## 16. 快速接手清单（新同学）
-
-1. 阅读：`backend/app/api/routes/invoices.py`
-2. 阅读：`backend/app/services/invoice_service.py`
-3. 阅读：`backend/app/services/llm_client.py`
-4. 启动本地前后端并上传一张样例 PDF 验证全链路。
-5. 确认 `source_files/archives/previews/meta` 四个目录有写权限。
-6. 执行 `npx tsc --noEmit` 与 `npm run build`，确保前端构建通过。
-7. 测试结束后执行 `./scripts/clean_test_data.sh` 清理测试数据。
+欢迎提交 Issue 和 PR！

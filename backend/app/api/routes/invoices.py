@@ -6,7 +6,14 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.core.config import settings
-from app.schemas.invoice import InvoiceCreateResponse, InvoiceDetailResponse, InvoiceExtractedData, InvoiceListItem
+from app.schemas.invoice import (
+    ApprovalRequest,
+    ApprovalResponse,
+    InvoiceCreateResponse,
+    InvoiceDetailResponse,
+    InvoiceExtractedData,
+    InvoiceListItem,
+)
 from app.services.invoice_service import (
     archive_pdf,
     build_archive_filename,
@@ -138,6 +145,7 @@ def get_all_invoices(db: Session = Depends(get_db)):
             tax_id=r.tax_id,
             item_name=r.item_name,
             created_at=r.created_at.isoformat() if hasattr(r.created_at, "isoformat") else str(r.created_at),
+            approval_status=getattr(r, "approval_status", "pending"),
         )
         for r in records
     ]
@@ -168,6 +176,10 @@ def get_invoice_detail(invoice_id: int, db: Session = Depends(get_db)):
         archive_preview_image_url=_preview_url_by_id(target.id, "archive_preview_image_name"),
         preview_image_url=_preview_url_by_id(target.id, "preview_image_name"),
         created_at=target.created_at.isoformat() if hasattr(target.created_at, "isoformat") else str(target.created_at),
+        approval_status=getattr(target, "approval_status", "pending"),
+        approval_comment=getattr(target, "approval_comment", None),
+        approver_name=getattr(target, "approver_name", None),
+        approved_at=target.approved_at.isoformat() if hasattr(target, "approved_at") and target.approved_at else None,
     )
 
 
@@ -192,3 +204,33 @@ def _preview_url_by_id(invoice_id: int, key: str) -> str | None:
     if not preview_name:
         return None
     return f"/files/preview/{preview_name}"
+
+
+@router.post("/{invoice_id}/approve", response_model=ApprovalResponse)
+def approve_invoice(
+    invoice_id: int,
+    approval: ApprovalRequest,
+    db: Session = Depends(get_db),
+):
+    target = get_invoice_by_id(db, invoice_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="发票记录不存在")
+
+    if approval.status not in ("approved", "rejected"):
+        raise HTTPException(status_code=400, detail="审批状态只能是 approved 或 rejected")
+
+    from datetime import datetime
+    target.approval_status = approval.status
+    target.approval_comment = approval.comment
+    target.approver_name = approval.approver_name
+    target.approved_at = datetime.utcnow()
+    db.commit()
+    db.refresh(target)
+
+    return ApprovalResponse(
+        id=target.id,
+        approval_status=target.approval_status,
+        approval_comment=target.approval_comment,
+        approver_name=target.approver_name,
+        approved_at=target.approved_at.isoformat() if target.approved_at else None,
+    )

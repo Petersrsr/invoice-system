@@ -5,6 +5,9 @@
 Thumbs.db
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
 
 # ------------------------------
 # Python backend
@@ -16,6 +19,9 @@ backend/**/*.pyc
 backend/**/*.pyo
 backend/.pytest_cache/
 backend/.mypy_cache/
+backend/*.egg-info/
+backend/dist/
+backend/build/
 
 # Local env files (keep *.example)
 backend/.env
@@ -25,6 +31,7 @@ backend/.env.*
 # Runtime / local database / uploads
 backend/invoice.db
 backend/invoice.db-*
+backend/invoice.db-journal
 backend/source_files/**
 backend/archives/**
 backend/previews/**
@@ -39,6 +46,8 @@ frontend/.env
 frontend/.env.*
 !frontend/.env.example
 frontend/.vite/
+frontend/.cache/
+frontend/.eslintcache
 
 # ------------------------------
 # Logs / temp
@@ -50,3 +59,28 @@ yarn-error.log*
 pnpm-debug.log*
 *.tmp
 *.swp
+*.swo
+*~
+
+# ------------------------------
+# Root directory
+# ------------------------------
+.env
+.env.*
+!.env.docker
+!.env.example
+
+# Backup files
+backup/
+*.backup
+*.bak
+
+# ------------------------------
+# Docker
+# ------------------------------
+.dockerignore
+
+# ------------------------------
+# Trae IDE
+# ------------------------------
+.trae/

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.db.models import InvoiceRecord
 from app.core.config import settings
 from app.schemas.invoice import (
     ApprovalRequest,
@@ -94,6 +95,7 @@ async def upload_invoice(
             uploader_name=uploader_name,
             raw_text=raw_text,
             extracted=extracted,
+            approval_status="draft" if draft else "pending",
         )
 
     source_preview_name = f"{record.id}-source.png"
@@ -233,11 +235,11 @@ def approve_invoice(
     if not approval.approver_name or not approval.approver_name.strip():
         raise HTTPException(status_code=400, detail="审批人姓名不能为空")
 
-    from datetime import datetime
+    from datetime import datetime, timezone
     target.approval_status = approval.status
     target.approval_comment = approval.comment
     target.approver_name = approval.approver_name.strip()
-    target.approved_at = datetime.utcnow()
+    target.approved_at = datetime.now(timezone.utc)
     db.commit()
 
     return ApprovalResponse(
@@ -257,27 +259,66 @@ def confirm_invoice(
     target = get_invoice_by_id(db, invoice_id)
     if not target:
         raise HTTPException(status_code=404, detail="发票记录不存在")
-    
+
+    if target.approval_status != "draft":
+        raise HTTPException(status_code=400, detail="该发票不是草稿状态，无法确认提交")
+
+    replaced = False
+    invoice_num = target.invoice_number or extract_invoice_number_from_file_name(target.file_name)
+    if invoice_num:
+        duplicate = (
+            db.query(InvoiceRecord)
+            .filter(
+                InvoiceRecord.invoice_number == invoice_num,
+                InvoiceRecord.id != target.id,
+            )
+            .order_by(InvoiceRecord.id.desc())
+            .first()
+        )
+        if duplicate:
+            _cleanup_invoice_files(duplicate.id, duplicate.source_file_name, duplicate.archived_file_name)
+            db.delete(duplicate)
+            db.commit()
+            replaced = True
+
     target.approval_status = "pending"
     db.commit()
-    
+    db.refresh(target)
+
     return InvoiceCreateResponse(
         id=target.id,
         file_name=target.file_name,
         uploader_name=target.uploader_name,
-        replaced=False,
-        message="提交成功",
+        replaced=replaced,
+        message="检测到重复发票号，已覆盖旧记录" if replaced else "提交成功",
         extracted=InvoiceExtractedData(
             amount=target.amount,
             date=target.invoice_date,
             seller_name=target.title,
             purpose=target.item_name,
-            invoice_number=target.invoice_number,
+            invoice_number=invoice_num,
             tax_id=target.tax_id,
             title=target.title,
             item_name=target.item_name,
         ),
     )
+
+
+def _cleanup_invoice_files(invoice_id: int, source_file_name: str | None, archived_file_name: str | None) -> None:
+    source_path = Path(settings.source_dir) / (source_file_name or "")
+    archive_path = Path(settings.archive_dir) / (archived_file_name or "")
+    source_preview_path = Path(settings.preview_dir) / f"{invoice_id}-source.png"
+    archive_preview_path = Path(settings.preview_dir) / f"{invoice_id}-archive.png"
+    meta_path = Path(settings.meta_dir) / f"{invoice_id}.json"
+
+    for file_path in [source_path, archive_path, source_preview_path, archive_preview_path, meta_path]:
+        if file_path.exists():
+            try:
+                file_path.unlink()
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"删除文件失败: {file_path} - {str(e)}")
 
 
 @router.delete("/{invoice_id}/cancel")
@@ -288,10 +329,15 @@ def cancel_invoice(
     target = get_invoice_by_id(db, invoice_id)
     if not target:
         raise HTTPException(status_code=404, detail="发票记录不存在")
-    
+
+    if target.approval_status != "draft":
+        raise HTTPException(status_code=400, detail="仅草稿状态的发票可以取消")
+
+    _cleanup_invoice_files(target.id, target.source_file_name, target.archived_file_name)
+
     db.delete(target)
     db.commit()
-    
+
     return {"status": "ok", "message": "已取消并删除草稿"}
 
 
@@ -303,23 +349,10 @@ def delete_invoice(
     target = get_invoice_by_id(db, invoice_id)
     if not target:
         raise HTTPException(status_code=404, detail="发票记录不存在")
-    
-    source_path = Path(settings.source_dir) / (target.source_file_name or "")
-    archive_path = Path(settings.archive_dir) / (target.archived_file_name or "")
-    source_preview_path = Path(settings.preview_dir) / f"{invoice_id}-source.png"
-    archive_preview_path = Path(settings.preview_dir) / f"{invoice_id}-archive.png"
-    meta_path = Path(settings.meta_dir) / f"{invoice_id}.json"
-    
-    for file_path in [source_path, archive_path, source_preview_path, archive_preview_path, meta_path]:
-        if file_path.exists():
-            try:
-                file_path.unlink()
-            except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"删除文件失败: {file_path} - {str(e)}")
-    
+
+    _cleanup_invoice_files(target.id, target.source_file_name, target.archived_file_name)
+
     db.delete(target)
     db.commit()
-    
+
     return {"status": "ok", "message": "已彻底删除发票记录及所有相关文件"}

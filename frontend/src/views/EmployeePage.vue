@@ -1,19 +1,46 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
+import { confirmInvoice, cancelInvoice } from "../api/invoice";
 import InvoiceUpload from "../components/InvoiceUpload.vue";
 import type { UploadInvoiceResponse } from "../types/invoice";
 
 const confirmOpen = ref(false);
 const latestUpload = ref<UploadInvoiceResponse | null>(null);
+const submitting = ref(false);
 
 function onUploaded(payload: UploadInvoiceResponse) {
   latestUpload.value = payload;
   confirmOpen.value = true;
 }
 
-function closeConfirm() {
-  confirmOpen.value = false;
+async function handleConfirm() {
+  if (!latestUpload.value) return;
+  submitting.value = true;
+  try {
+    await confirmInvoice(latestUpload.value.id);
+    alert("提交成功，已进入审批流程");
+  } catch {
+    alert("提交失败，请重试");
+  } finally {
+    submitting.value = false;
+    confirmOpen.value = false;
+    latestUpload.value = null;
+  }
+}
+
+async function handleCancel() {
+  if (!latestUpload.value) return;
+  submitting.value = true;
+  try {
+    await cancelInvoice(latestUpload.value.id);
+  } catch {
+    alert("取消失败，请重试");
+  } finally {
+    submitting.value = false;
+    confirmOpen.value = false;
+    latestUpload.value = null;
+  }
 }
 </script>
 
@@ -30,7 +57,7 @@ function closeConfirm() {
     <InvoiceUpload @uploaded="onUploaded" />
     </div>
 
-    <div v-if="confirmOpen && latestUpload" class="fixed inset-0 z-50 bg-black/30 p-4" @click.self="closeConfirm">
+    <div v-if="confirmOpen && latestUpload" class="fixed inset-0 z-50 bg-black/30 p-4" @click.self="handleCancel">
       <div class="mx-auto mt-16 w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
         <h3 class="text-lg font-semibold text-slate-800">发票识别完成</h3>
         <p class="mt-1 text-sm text-slate-500">请确认以下识别信息是否正确</p>
@@ -52,16 +79,18 @@ function closeConfirm() {
 
         <div class="mt-5 flex justify-end gap-2">
           <button
-            class="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-            @click="closeConfirm"
+            class="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            :disabled="submitting"
+            @click="handleCancel"
           >
-            返回修改
+            {{ submitting ? "处理中..." : "返回修改" }}
           </button>
           <button
-            class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
-            @click="closeConfirm"
+            class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
+            :disabled="submitting"
+            @click="handleConfirm"
           >
-            确认提交
+            {{ submitting ? "提交中..." : "确认提交" }}
           </button>
         </div>
       </div>

@@ -54,23 +54,24 @@ async function handleDelete(id: number) {
             @click="emit('select', row.id)"
           >
             <td class="px-4 py-3">{{ row.uploader_name ?? "-" }}</td>
-            <td class="px-4 py-3 truncate" :title="row.file_name">{{ row.file_name }}</td>
-            <td class="px-4 py-3 truncate" :title="row.seller_name ?? row.title">{{ row.seller_name ?? row.title ?? "-" }}</td>
+            <td class="px-4 py-3 truncate" :title="row.file_name ?? undefined">{{ row.file_name }}</td>
+            <td class="px-4 py-3 truncate" :title="(row.seller_name ?? row.title) ?? undefined">{{ row.seller_name ?? row.title ?? "-" }}</td>
             <td class="px-4 py-3">{{ row.purpose ?? row.item_name ?? "-" }}</td>
             <td class="px-4 py-3 text-right">{{ row.amount ?? '-' }}</td>
             <td class="px-4 py-3 text-center">{{ row.invoice_date ?? '-' }}</td>
-            <td class="px-4 py-3 font-mono truncate" :title="row.invoice_number">{{ row.invoice_number ?? "-" }}</td>
-            <td class="px-4 py-3 font-mono truncate" :title="row.tax_id">{{ row.tax_id ?? '-' }}</td>
+            <td class="px-4 py-3 font-mono truncate" :title="row.invoice_number ?? undefined">{{ row.invoice_number ?? "-" }}</td>
+            <td class="px-4 py-3 font-mono truncate" :title="row.tax_id ?? undefined">{{ row.tax_id ?? '-' }}</td>
             <td class="px-4 py-3">
               <span
                 class="inline-flex items-center justify-center rounded px-2 py-0.5 text-xs font-medium"
                 :class="{
+                  'bg-slate-100 text-slate-600': row.approval_status === 'draft',
                   'bg-yellow-100 text-yellow-700': row.approval_status === 'pending',
                   'bg-green-100 text-green-700': row.approval_status === 'approved',
                   'bg-red-100 text-red-700': row.approval_status === 'rejected',
                 }"
               >
-                {{ row.approval_status === 'pending' ? '待审批' : row.approval_status === 'approved' ? '已批准' : '已拒绝' }}
+                {{ row.approval_status === 'draft' ? '草稿' : row.approval_status === 'pending' ? '待审批' : row.approval_status === 'approved' ? '已批准' : '已拒绝' }}
               </span>
             </td>
             <td class="px-4 py-3">

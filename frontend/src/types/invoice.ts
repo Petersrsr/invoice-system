@@ -34,7 +34,7 @@ export interface InvoiceRecord {
   tax_id: string | null;
   item_name: string | null;
   created_at: string;
-  approval_status: "pending" | "approved" | "rejected";
+  approval_status: "draft" | "pending" | "approved" | "rejected";
 }
 
 // 发票详情结构：含文件链接、预览图与原始文本。
@@ -57,7 +57,7 @@ export interface InvoiceDetail {
   preview_image_url: string | null;
   raw_text: string | null;
   created_at: string;
-  approval_status: "pending" | "approved" | "rejected";
+  approval_status: "draft" | "pending" | "approved" | "rejected";
   approval_comment: string | null;
   approver_name: string | null;
   approved_at: string | null;

@@ -45,6 +45,7 @@ def save_invoice_with_files(
     uploader_name: str | None,
     raw_text: str,
     extracted: dict,
+    approval_status: str = "pending",
 ) -> InvoiceRecord:
     record = InvoiceRecord(
         file_name=file_name,
@@ -58,6 +59,7 @@ def save_invoice_with_files(
         tax_id=extracted.get("tax_id"),
         item_name=extracted.get("purpose"),
         raw_text=raw_text,
+        approval_status=approval_status,
     )
     db.add(record)
     db.commit()
@@ -220,7 +222,7 @@ def _sanitize_filename_part(value, max_bytes: int = 120) -> str:
     if not text:
         return ""
     text = re.sub(r"[\\/:*?\"<>|]", "_", text)
-    text = re.sub(r"\s+", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
     text = _truncate_utf8(text, max_bytes)
     return text
 

@@ -19,9 +19,10 @@ const imagePreviewSrc = ref("");
 const imagePreviewAlt = ref("");
 
 const totalAmount = computed(() =>
-  invoices.value.reduce((sum, row) => sum + (row.amount ?? 0), 0),
+  invoices.value.filter(i => i.approval_status !== "draft").reduce((sum, row) => sum + (row.amount ?? 0), 0),
 );
 
+const draftCount = computed(() => invoices.value.filter(i => i.approval_status === "draft").length);
 const pendingCount = computed(() => invoices.value.filter(i => i.approval_status === "pending").length);
 const approvedCount = computed(() => invoices.value.filter(i => i.approval_status === "approved").length);
 const rejectedCount = computed(() => invoices.value.filter(i => i.approval_status === "rejected").length);
@@ -141,8 +142,10 @@ onMounted(loadData);
         <p class="mt-1 text-2xl font-semibold text-slate-800">{{ totalAmount.toFixed(2) }} 元</p>
       </div>
       <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <p class="text-xs text-slate-500">审批状态</p>
+        <p class="text-xs text-slate-500">草稿 / 待审批 / 已批准 / 已拒绝</p>
         <p class="mt-1 text-2xl font-semibold text-slate-800">
+          <span class="text-slate-500">{{ draftCount }}</span>
+          <span class="text-slate-400"> / </span>
           <span class="text-yellow-600">{{ pendingCount }}</span>
           <span class="text-slate-400"> / </span>
           <span class="text-green-600">{{ approvedCount }}</span>
@@ -202,7 +205,7 @@ onMounted(loadData);
           <h3 class="text-lg font-semibold text-slate-800">发票详情</h3>
           <div class="flex items-center gap-2">
             <button
-              v-if="selected.approval_status === 'pending'"
+              v-if="selected?.approval_status === 'pending'"
               class="rounded bg-indigo-600 px-4 py-1.5 text-sm text-white hover:bg-indigo-700"
               @click="openApprovalDialog"
             >
@@ -230,12 +233,13 @@ onMounted(loadData);
                 <span
                   class="rounded px-2 py-0.5 text-xs font-medium"
                   :class="{
+                    'bg-slate-100 text-slate-600': selected.approval_status === 'draft',
                     'bg-yellow-100 text-yellow-700': selected.approval_status === 'pending',
                     'bg-green-100 text-green-700': selected.approval_status === 'approved',
                     'bg-red-100 text-red-700': selected.approval_status === 'rejected',
                   }"
                 >
-                  {{ selected.approval_status === 'pending' ? '待审批' : selected.approval_status === 'approved' ? '已批准' : '已拒绝' }}
+                  {{ selected.approval_status === 'draft' ? '草稿' : selected.approval_status === 'pending' ? '待审批' : selected.approval_status === 'approved' ? '已批准' : '已拒绝' }}
                 </span>
               </p>
               <template v-if="selected.approval_status !== 'pending'">

@@ -12,42 +12,39 @@ Thumbs.db
 # ------------------------------
 # Python backend
 # ------------------------------
-backend/.venv/
-backend/venv/
-backend/**/__pycache__/
-backend/**/*.pyc
-backend/**/*.pyo
-backend/.pytest_cache/
-backend/.mypy_cache/
-backend/*.egg-info/
-backend/dist/
-backend/build/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
 
 # Local env files (keep *.example)
-backend/.env
-backend/.env.*
-!backend/.env.example
+.env
+.env.*
+!.env.example
 
 # Runtime / local database / uploads
-backend/invoice.db
-backend/invoice.db-*
-backend/invoice.db-journal
-backend/source_files/**
-backend/archives/**
-backend/previews/**
-backend/meta/**
+invoice.db
+invoice.db-*
+invoice.db-journal
+source_files/
+archives/
+previews/
+meta/
 
 # ------------------------------
 # Frontend
 # ------------------------------
-frontend/node_modules/
-frontend/dist/
-frontend/.env
-frontend/.env.*
-!frontend/.env.example
-frontend/.vite/
-frontend/.cache/
-frontend/.eslintcache
+node_modules/
+dist/
+.vite/
+.cache/
+.eslintcache
 
 # ------------------------------
 # Logs / temp
@@ -58,27 +55,13 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 *.tmp
-*.swp
-*.swo
-*~
 
 # ------------------------------
-# Root directory
-# ------------------------------
-.env
-.env.*
-!.env.docker
-!.env.example
-
 # Backup files
+# ------------------------------
 backup/
 *.backup
 *.bak
-
-# ------------------------------
-# Docker
-# ------------------------------
-.dockerignore
 
 # ------------------------------
 # Trae IDE

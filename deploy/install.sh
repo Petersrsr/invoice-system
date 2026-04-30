@@ -8,6 +8,10 @@ BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_PORT="${FRONTEND_PORT:-80}"
 SERVICE_USER="${SERVICE_USER:-www}"
 
+LLM_API_KEY="${LLM_API_KEY:-}"
+LLM_API_BASE="${LLM_API_BASE:-https://api.deepseek.com}"
+LLM_MODEL="${LLM_MODEL:-deepseek-chat}"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -55,10 +59,17 @@ ensure_system_deps() {
 
   if ! command -v python3 &>/dev/null; then
     log_info "安装 Python..."
-    apt-get install -y python3 python3-venv python3-pip
+    apt-get install -y python3 python3-pip
   fi
   detect_python
   log_info "Python: $($PYTHON_CMD --version)"
+
+  local py_pkg
+  py_pkg=$($PYTHON_CMD -c "import sys; print(f'python{sys.version_info.major}.{sys.version_info.minor}-venv')")
+  if ! dpkg -s "$py_pkg" &>/dev/null 2>&1; then
+    log_info "安装 ${py_pkg}..."
+    apt-get install -y "$py_pkg"
+  fi
 
   detect_node
   if [[ "$NODE_AVAILABLE" -eq 0 ]]; then
@@ -81,13 +92,67 @@ ensure_service_user() {
   fi
 }
 
+configure_llm_env() {
+  echo ""
+  echo "=========================================="
+  log_info "LLM 服务配置"
+  echo "=========================================="
+  echo ""
+  echo "  请输入以下配置信息（直接回车使用默认值）："
+  echo ""
+
+  if [[ -z "$LLM_API_KEY" ]]; then
+    read -rp "  LLM API Key（必填）: " input_key
+    LLM_API_KEY="$input_key"
+  else
+    log_info "LLM_API_KEY 已通过环境变量设置"
+  fi
+
+  if [[ -z "$LLM_API_KEY" ]]; then
+    log_error "LLM_API_KEY 不能为空，上传发票时将无法解析"
+    log_warn "可以稍后编辑 backend/.env 填入 API Key"
+  else
+    log_info "LLM_API_KEY 已设置"
+  fi
+
+  read -rp "  LLM API Base [${LLM_API_BASE}]: " input_base
+  LLM_API_BASE="${input_base:-$LLM_API_BASE}"
+
+  read -rp "  LLM Model [${LLM_MODEL}]: " input_model
+  LLM_MODEL="${input_model:-$LLM_MODEL}"
+
+  echo ""
+  log_info "配置确认："
+  echo "    API Key:   ${LLM_API_KEY:+****}${LLM_API_KEY:-（未设置）}"
+  echo "    API Base:  ${LLM_API_BASE}"
+  echo "    Model:     ${LLM_MODEL}"
+  echo ""
+
+  local backend_dir="${PROJECT_ROOT}/backend"
+  local env_file="${backend_dir}/.env"
+
+  if [[ -f "$env_file" ]]; then
+    sed -i "s|^LLM_API_KEY=.*|LLM_API_KEY=${LLM_API_KEY}|" "$env_file"
+    sed -i "s|^LLM_API_BASE=.*|LLM_API_BASE=${LLM_API_BASE}|" "$env_file"
+    sed -i "s|^LLM_MODEL=.*|LLM_MODEL=${LLM_MODEL}|" "$env_file"
+  else
+    cp "${backend_dir}/.env.example" "$env_file"
+    sed -i "s|^LLM_API_KEY=.*|LLM_API_KEY=${LLM_API_KEY}|" "$env_file"
+    sed -i "s|^LLM_API_BASE=.*|LLM_API_BASE=${LLM_API_BASE}|" "$env_file"
+    sed -i "s|^LLM_MODEL=.*|LLM_MODEL=${LLM_MODEL}|" "$env_file"
+  fi
+
+  log_info "backend/.env 已写入"
+}
+
 setup_backend() {
   log_info "配置后端..."
   local backend_dir="${PROJECT_ROOT}/backend"
   cd "$backend_dir"
 
-  if [[ ! -d ".venv" ]]; then
+  if [[ ! -x ".venv/bin/pip" ]]; then
     log_info "创建 Python 虚拟环境..."
+    rm -rf .venv
     "$PYTHON_CMD" -m venv .venv
   fi
 
@@ -96,7 +161,6 @@ setup_backend() {
 
   if [[ ! -f ".env" ]]; then
     cp .env.example .env
-    log_warn "已创建 backend/.env，请编辑填入 LLM_API_KEY"
   fi
 
   mkdir -p source_files archives previews meta

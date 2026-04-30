@@ -1,5 +1,24 @@
 <script setup lang="ts">
-// App 仅负责站点级导航与路由出口，具体业务页面在 views 下维护。
+import { ref, onMounted, onUnmounted } from "vue";
+
+const backendStatus = ref<"checking" | "online" | "offline">("checking");
+let timer: ReturnType<typeof setInterval>;
+
+async function checkHealth() {
+  try {
+    const base = `${window.location.protocol}//${window.location.hostname}:8000`;
+    const resp = await fetch(`${base}/health`, { signal: AbortSignal.timeout(5000) });
+    backendStatus.value = resp.ok ? "online" : "offline";
+  } catch {
+    backendStatus.value = "offline";
+  }
+}
+
+onMounted(() => {
+  checkHealth();
+  timer = setInterval(checkHealth, 10000);
+});
+onUnmounted(() => clearInterval(timer));
 </script>
 
 <template>
@@ -11,7 +30,25 @@
             <h1 class="text-2xl font-bold tracking-tight text-slate-800 md:text-3xl">企业自动化发票报销系统</h1>
             <p class="mt-2 text-sm text-slate-500 md:text-base">员工上传发票，会计查看汇总与统计。</p>
           </div>
-          <nav class="flex items-center gap-2">
+          <nav class="flex items-center gap-3">
+            <span
+              class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
+              :class="{
+                'bg-green-100 text-green-700': backendStatus === 'online',
+                'bg-red-100 text-red-700': backendStatus === 'offline',
+                'bg-yellow-100 text-yellow-700': backendStatus === 'checking',
+              }"
+            >
+              <span
+                class="h-1.5 w-1.5 rounded-full"
+                :class="{
+                  'bg-green-500': backendStatus === 'online',
+                  'bg-red-500': backendStatus === 'offline',
+                  'bg-yellow-500 animate-pulse': backendStatus === 'checking',
+                }"
+              ></span>
+              {{ backendStatus === "online" ? "后端已连接" : backendStatus === "offline" ? "后端离线" : "检测中..." }}
+            </span>
             <RouterLink
               to="/employee"
               class="rounded-lg px-4 py-2 text-sm font-medium transition-colors"

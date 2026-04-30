@@ -1,14 +1,13 @@
 [Unit]
-# FastAPI 后端常驻服务。
 Description=Invoice System Backend (FastAPI)
 After=network.target
 
 [Service]
 Type=simple
-User=www
-Group=www
-WorkingDirectory=/www/wwwroot/invoice-system
-ExecStart=/www/wwwroot/invoice-system/deploy/start_backend.sh
+User=__SERVICE_USER__
+Group=__SERVICE_USER__
+WorkingDirectory=__PROJECT_ROOT__/backend
+ExecStart=__PROJECT_ROOT__/deploy/start_backend.sh
 Restart=always
 RestartSec=3
 Environment=PYTHONUNBUFFERED=1

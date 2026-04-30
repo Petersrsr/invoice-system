@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, onBeforeUnmount } from "vue";
 import { uploadInvoice } from "../api/invoice";
 import type { UploadInvoiceResponse } from "../types/invoice";
 
@@ -10,6 +10,7 @@ const loading = ref(false);
 const message = ref("拖拽 PDF 到这里，或点击选择文件");
 const uploaderName = ref("");
 const uploadSuccess = ref(false);
+let resetTimer: ReturnType<typeof setTimeout> | null = null;
 
 function onDragOver() {
   isDragging.value = true;
@@ -19,19 +20,37 @@ function onDragLeave() {
   isDragging.value = false;
 }
 
+function scheduleReset() {
+  if (resetTimer !== null) clearTimeout(resetTimer);
+  resetTimer = setTimeout(() => {
+    uploaderName.value = "";
+    uploadSuccess.value = false;
+    message.value = "拖拽 PDF 到这里，或点击选择文件";
+    resetTimer = null;
+  }, 3000);
+}
+
+onBeforeUnmount(() => {
+  if (resetTimer !== null) clearTimeout(resetTimer);
+});
+
 async function handleFile(file: File) {
   const trimmedName = uploaderName.value.trim();
   if (!trimmedName) {
     message.value = "请先填写上传人姓名";
     return;
   }
+  if (!file || file.type !== "application/pdf") {
+    message.value = "仅支持 PDF 文件";
+    return;
+  }
   if (file.size > 10 * 1024 * 1024) {
     message.value = "文件大小超过限制（最大 10MB）";
     return;
   }
-  if (!file || file.type !== "application/pdf") {
-    message.value = "仅支持 PDF 文件";
-    return;
+  if (resetTimer !== null) {
+    clearTimeout(resetTimer);
+    resetTimer = null;
   }
   loading.value = true;
   uploadSuccess.value = false;
@@ -49,11 +68,7 @@ async function handleFile(file: File) {
       message.value = "上传成功，已完成解析";
     }
     emit("uploaded", normalizedResult);
-    setTimeout(() => {
-      uploaderName.value = "";
-      uploadSuccess.value = false;
-      message.value = "拖拽 PDF 到这里，或点击选择文件";
-    }, 3000);
+    scheduleReset();
   } catch (err) {
     uploadSuccess.value = false;
     message.value = "上传失败，请检查后端服务或 API Key 配置";

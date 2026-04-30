@@ -57,7 +57,7 @@ async function handleCancel() {
     <InvoiceUpload @uploaded="onUploaded" />
     </div>
 
-    <div v-if="confirmOpen && latestUpload" class="fixed inset-0 z-50 bg-black/30 p-4" @click.self="handleCancel">
+    <div v-if="confirmOpen && latestUpload" class="fixed inset-0 z-50 bg-black/30 p-4" @click.self="confirmOpen = false; latestUpload = null">
       <div class="mx-auto mt-16 w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
         <h3 class="text-lg font-semibold text-slate-800">发票识别完成</h3>
         <p class="mt-1 text-sm text-slate-500">请确认以下识别信息是否正确</p>

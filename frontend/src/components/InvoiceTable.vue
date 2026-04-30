@@ -7,13 +7,12 @@ defineProps<{ data: InvoiceRecord[] }>();
 const emit = defineEmits<{ (e: "select", id: number): void; (e: "delete"): void }>();
 
 const deletingId = ref<number | null>(null);
-const confirmDeleteId = ref<number | null>(null);
 
 async function handleDelete(id: number) {
   if (!confirm("确定要删除这条发票记录吗？此操作不可撤销，所有相关文件将被彻底删除。")) {
     return;
   }
-  
+
   deletingId.value = id;
   try {
     await deleteInvoice(id);
@@ -22,7 +21,6 @@ async function handleDelete(id: number) {
     alert("删除失败，请重试");
   } finally {
     deletingId.value = null;
-    confirmDeleteId.value = null;
   }
 }
 </script>

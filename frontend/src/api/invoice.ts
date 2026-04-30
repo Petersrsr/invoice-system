@@ -23,6 +23,15 @@ const http = axios.create({
   baseURL: apiBase,
 });
 
+http.interceptors.response.use(
+  (resp) => resp,
+  (err) => {
+    const msg = err.response?.data?.detail || err.message || "网络请求失败";
+    console.error("[API Error]", msg);
+    return Promise.reject(err);
+  },
+);
+
 // 上传发票 PDF，后端返回解析结果与是否覆盖信息。
 export async function uploadInvoice(file: File, uploaderName: string, draft: boolean = true): Promise<UploadInvoiceResponse> {
   const form = new FormData();

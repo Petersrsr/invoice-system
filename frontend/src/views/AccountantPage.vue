@@ -12,8 +12,8 @@ const detailLoading = ref(false);
 const approvalLoading = ref(false);
 const approvalDialogOpen = ref(false);
 const approvalForm = ref({ status: "approved" as "approved" | "rejected", comment: "", approverName: "" });
-const defaultApiOrigin = `${window.location.protocol}//${window.location.hostname}:8000`;
-const apiBase = (import.meta.env.VITE_API_ORIGIN as string | undefined) ?? defaultApiOrigin;
+const defaultApiBase = `${window.location.protocol}//${window.location.hostname}:8000`;
+const apiBase = (import.meta.env.VITE_API_BASE?.replace(/\/api\/?$/, "") as string | undefined) ?? defaultApiBase;
 const imagePreviewOpen = ref(false);
 const imagePreviewSrc = ref("");
 const imagePreviewAlt = ref("");
@@ -73,14 +73,21 @@ function uploaderBarWidth(amount: number): string {
 }
 
 async function loadData() {
-  invoices.value = await fetchInvoices();
+  try {
+    invoices.value = await fetchInvoices();
+  } catch {
+    // 静默处理，保留已有数据
+  }
 }
 
 async function openDetail(id: number) {
   detailLoading.value = true;
   detailOpen.value = true;
+  selected.value = null;
   try {
     selected.value = await fetchInvoiceDetail(id);
+  } catch {
+    detailOpen.value = false;
   } finally {
     detailLoading.value = false;
   }
@@ -88,6 +95,7 @@ async function openDetail(id: number) {
 
 function closeDetail() {
   detailOpen.value = false;
+  selected.value = null;
 }
 
 function openApprovalDialog() {
@@ -101,17 +109,22 @@ async function submitApproval() {
     return;
   }
   approvalLoading.value = true;
+  const invoiceId = selected.value.id;
   try {
-    await approveInvoice(selected.value.id, {
+    await approveInvoice(invoiceId, {
       status: approvalForm.value.status,
       comment: approvalForm.value.comment,
       approver_name: approvalForm.value.approverName.trim(),
     });
     approvalDialogOpen.value = false;
-    selected.value = await fetchInvoiceDetail(selected.value.id);
-    await loadData();
+    try {
+      selected.value = await fetchInvoiceDetail(invoiceId);
+      await loadData();
+    } catch {
+      // 审批已成功，刷新失败不影响结果
+    }
     alert("审批提交成功");
-  } catch (err) {
+  } catch {
     alert("审批提交失败，请重试");
   } finally {
     approvalLoading.value = false;
@@ -302,7 +315,7 @@ onMounted(loadData);
       </div>
     </div>
 
-    <div v-if="approvalDialogOpen" class="fixed inset-0 z-[60] bg-black/30 p-4" @click.self="approvalDialogOpen = false">
+    <div v-if="approvalDialogOpen" class="fixed inset-0 z-[60] bg-black/30 p-4" @click.self="!approvalLoading && (approvalDialogOpen = false)">
       <div class="mx-auto mt-24 max-w-md rounded-2xl bg-white p-6 shadow-xl">
         <h3 class="mb-4 text-lg font-semibold text-slate-800">审批操作</h3>
         <div class="space-y-4">

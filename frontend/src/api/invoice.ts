@@ -19,6 +19,9 @@ export interface ApprovalResponse {
 const defaultApiBase = `${window.location.protocol}//${window.location.hostname}:8000/api`;
 const apiBase = (import.meta.env.VITE_API_BASE as string | undefined) ?? defaultApiBase;
 
+// 导出文件服务基础 URL（不含 /api 后缀），供前端拼接静态资源链接。
+export const fileBase = apiBase.replace(/\/api\/?$/, "");
+
 const http = axios.create({
   baseURL: apiBase,
 });

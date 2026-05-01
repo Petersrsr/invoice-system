@@ -203,7 +203,7 @@ def _normalize_invoice_number(value: str | None) -> str | None:
     if value is None:
         return None
     cleaned = str(value).strip()
-    if not cleaned or cleaned in {"未知号码", "null", "None"}:
+    if not cleaned or cleaned.lower() in {"未知号码", "null", "none", "n/a"}:
         return None
     return cleaned
 
@@ -240,12 +240,12 @@ def _make_unique_file_name(folder: Path, file_name: str) -> str:
         return file_name
     stem = target.stem
     suffix = target.suffix
-    index = 2
-    while True:
+    for index in range(2, 10000):
         candidate = f"{stem}-{index}{suffix}"
         if not (folder / candidate).exists():
             return candidate
-        index += 1
+    from uuid import uuid4
+    return f"{stem}-{uuid4().hex[:8]}{suffix}"
 
 
 def _capture(text: str, patterns: list[str]) -> str | None:
@@ -274,13 +274,9 @@ def _utf8_len(text: str) -> int:
 
 
 def _normalize_purpose(purpose: str | None, raw_text: str) -> str:
-    # 用途归类同时参考 LLM 输出与原文关键词，提高稳定性。
-    source = f"{purpose or ''} {raw_text}"
-    source = source.lower()
+    source = f"{purpose or ''} {raw_text}".lower()
     for category, keywords in PURPOSE_KEYWORDS.items():
         for keyword in keywords:
             if keyword.lower() in source:
                 return category
-    if purpose:
-        return "其他"
-    return "其他"
+    return purpose or "其他"

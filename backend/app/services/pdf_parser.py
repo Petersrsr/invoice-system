@@ -3,13 +3,16 @@ from pathlib import Path
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
-    # 提取整份 PDF 的可读文本，供 LLM 与规则解析使用。
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    texts: list[str] = []
-    for page in doc:
-        texts.append(page.get_text("text"))
-    doc.close()
-    return "\n".join(texts).strip()
+    try:
+        if len(doc) == 0:
+            return ""
+        texts: list[str] = []
+        for page in doc:
+            texts.append(page.get_text("text"))
+        return "\n".join(texts).strip()
+    finally:
+        doc.close()
 
 
 def render_pdf_first_page_to_png(pdf_bytes: bytes, output_path: str) -> None:

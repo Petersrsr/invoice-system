@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+import re
 import sqlite3
 
 from app.api.routes.invoices import router as invoice_router
@@ -32,10 +33,11 @@ def _ensure_sqlite_columns() -> None:
         rows = conn.execute("PRAGMA table_info(invoice_records)").fetchall()
         existing = {row[1] for row in rows}
         for col, col_type in _SQLITE_EXTRA_COLUMNS.items():
+            if not re.match(r"^[a-z_][a-z0-9_]*$", col):
+                raise ValueError(f"非法列名: {col}")
             if col not in existing:
                 conn.execute(f"ALTER TABLE invoice_records ADD COLUMN {col} {col_type}")
-        if "approval_status" in existing:
-            conn.execute("UPDATE invoice_records SET approval_status = 'pending' WHERE approval_status IS NULL")
+        conn.execute("UPDATE invoice_records SET approval_status = 'pending' WHERE approval_status IS NULL")
         conn.commit()
     finally:
         conn.close()

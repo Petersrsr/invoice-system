@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -31,6 +32,7 @@ from app.services.invoice_service import (
 from app.services.llm_client import parse_invoice_with_llm
 from app.services.pdf_parser import extract_text_from_pdf, render_pdf_first_page_to_png
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -52,7 +54,13 @@ async def upload_invoice(
     if not pdf_bytes:
         raise HTTPException(status_code=400, detail="上传文件为空")
 
-    raw_text = extract_text_from_pdf(pdf_bytes)
+    if not pdf_bytes[:4] == b"%PDF":
+        raise HTTPException(status_code=400, detail="文件内容不是有效的 PDF")
+
+    try:
+        raw_text = extract_text_from_pdf(pdf_bytes)
+    except Exception:
+        raise HTTPException(status_code=400, detail="PDF 文件损坏，无法解析")
     extracted = await parse_invoice_with_llm(raw_text)
     extracted = normalize_extracted_fields(raw_text, extracted)
     
@@ -102,24 +110,23 @@ async def upload_invoice(
     archive_preview_name = f"{record.id}-archive.png"
     source_preview_path = str(Path(settings.preview_dir) / source_preview_name)
     archive_preview_path = str(Path(settings.preview_dir) / archive_preview_name)
-    
+
+    meta_payload: dict[str, str] = {}
     try:
         render_pdf_first_page_to_png(pdf_bytes, source_preview_path)
-        render_pdf_first_page_to_png(pdf_bytes, archive_preview_path)
+        meta_payload["source_preview_image_name"] = source_preview_name
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f"预览图生成失败: {str(e)}")
-    
-    _write_meta(
-        record.id,
-        {
-            "source_preview_image_name": source_preview_name,
-            "archive_preview_image_name": archive_preview_name,
-            # Backward compatibility for older frontend payloads.
-            "preview_image_name": archive_preview_name,
-        },
-    )
+        logger.warning(f"源文件预览图生成失败: {e}")
+
+    try:
+        render_pdf_first_page_to_png(pdf_bytes, archive_preview_path)
+        meta_payload["archive_preview_image_name"] = archive_preview_name
+        meta_payload["preview_image_name"] = archive_preview_name
+    except Exception as e:
+        logger.warning(f"归档预览图生成失败: {e}")
+
+    if meta_payload:
+        _write_meta(record.id, meta_payload)
 
     return InvoiceCreateResponse(
         id=record.id,
@@ -235,6 +242,9 @@ def approve_invoice(
     if not approval.approver_name or not approval.approver_name.strip():
         raise HTTPException(status_code=400, detail="审批人姓名不能为空")
 
+    if target.approval_status != "pending":
+        raise HTTPException(status_code=400, detail="仅待审批状态的发票可以审批")
+
     from datetime import datetime, timezone
     target.approval_status = approval.status
     target.approval_comment = approval.comment
@@ -264,6 +274,7 @@ def confirm_invoice(
         raise HTTPException(status_code=400, detail="该发票不是草稿状态，无法确认提交")
 
     replaced = False
+    duplicate_to_cleanup = None
     invoice_num = target.invoice_number or extract_invoice_number_from_file_name(target.file_name)
     if invoice_num:
         duplicate = (
@@ -276,14 +287,16 @@ def confirm_invoice(
             .first()
         )
         if duplicate:
-            _cleanup_invoice_files(duplicate.id, duplicate.source_file_name, duplicate.archived_file_name)
+            duplicate_to_cleanup = duplicate
             db.delete(duplicate)
-            db.commit()
             replaced = True
 
     target.approval_status = "pending"
     db.commit()
     db.refresh(target)
+
+    if duplicate_to_cleanup:
+        _cleanup_invoice_files(duplicate_to_cleanup.id, duplicate_to_cleanup.source_file_name, duplicate_to_cleanup.archived_file_name)
 
     return InvoiceCreateResponse(
         id=target.id,
@@ -305,20 +318,22 @@ def confirm_invoice(
 
 
 def _cleanup_invoice_files(invoice_id: int, source_file_name: str | None, archived_file_name: str | None) -> None:
-    source_path = Path(settings.source_dir) / (source_file_name or "")
-    archive_path = Path(settings.archive_dir) / (archived_file_name or "")
     source_preview_path = Path(settings.preview_dir) / f"{invoice_id}-source.png"
     archive_preview_path = Path(settings.preview_dir) / f"{invoice_id}-archive.png"
     meta_path = Path(settings.meta_dir) / f"{invoice_id}.json"
 
-    for file_path in [source_path, archive_path, source_preview_path, archive_preview_path, meta_path]:
+    paths_to_delete = [source_preview_path, archive_preview_path, meta_path]
+    if source_file_name:
+        paths_to_delete.append(Path(settings.source_dir) / source_file_name)
+    if archived_file_name:
+        paths_to_delete.append(Path(settings.archive_dir) / archived_file_name)
+
+    for file_path in paths_to_delete:
         if file_path.exists():
             try:
                 file_path.unlink()
             except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"删除文件失败: {file_path} - {str(e)}")
+                logger.warning(f"删除文件失败: {file_path} - {e}")
 
 
 @router.delete("/{invoice_id}/cancel")
@@ -333,10 +348,10 @@ def cancel_invoice(
     if target.approval_status != "draft":
         raise HTTPException(status_code=400, detail="仅草稿状态的发票可以取消")
 
-    _cleanup_invoice_files(target.id, target.source_file_name, target.archived_file_name)
-
+    file_info = (target.id, target.source_file_name, target.archived_file_name)
     db.delete(target)
     db.commit()
+    _cleanup_invoice_files(*file_info)
 
     return {"status": "ok", "message": "已取消并删除草稿"}
 
@@ -350,9 +365,9 @@ def delete_invoice(
     if not target:
         raise HTTPException(status_code=404, detail="发票记录不存在")
 
-    _cleanup_invoice_files(target.id, target.source_file_name, target.archived_file_name)
-
+    file_info = (target.id, target.source_file_name, target.archived_file_name)
     db.delete(target)
     db.commit()
+    _cleanup_invoice_files(*file_info)
 
     return {"status": "ok", "message": "已彻底删除发票记录及所有相关文件"}

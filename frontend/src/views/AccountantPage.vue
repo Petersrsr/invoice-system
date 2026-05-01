@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 
-import { approveInvoice, fetchInvoiceDetail, fetchInvoices } from "../api/invoice";
+import { approveInvoice, fetchInvoiceDetail, fetchInvoices, fileBase } from "../api/invoice";
 import InvoiceTable from "../components/InvoiceTable.vue";
 import type { InvoiceDetail, InvoiceRecord } from "../types/invoice";
 
@@ -12,8 +12,6 @@ const detailLoading = ref(false);
 const approvalLoading = ref(false);
 const approvalDialogOpen = ref(false);
 const approvalForm = ref({ status: "approved" as "approved" | "rejected", comment: "", approverName: "" });
-const defaultApiBase = `${window.location.protocol}//${window.location.hostname}:8000`;
-const apiBase = (import.meta.env.VITE_API_BASE?.replace(/\/api\/?$/, "") as string | undefined) ?? defaultApiBase;
 const imagePreviewOpen = ref(false);
 const imagePreviewSrc = ref("");
 const imagePreviewAlt = ref("");
@@ -265,7 +263,7 @@ onMounted(loadData);
                 <a
                   v-if="selected.source_file_url"
                   class="text-indigo-600 hover:underline"
-                  :href="`${apiBase}${selected.source_file_url}`"
+                  :href="`${fileBase}${selected.source_file_url}`"
                   target="_blank"
                 >下载</a>
                 <span v-else>-</span>
@@ -275,7 +273,7 @@ onMounted(loadData);
                 <a
                   v-if="selected.archived_file_url"
                   class="text-indigo-600 hover:underline"
-                  :href="`${apiBase}${selected.archived_file_url}`"
+                  :href="`${fileBase}${selected.archived_file_url}`"
                   target="_blank"
                 >下载</a>
                 <span v-else>-</span>
@@ -288,10 +286,10 @@ onMounted(loadData);
                 <div class="rounded-xl bg-slate-50 p-3">
                   <img
                     v-if="selected.source_preview_image_url || selected.preview_image_url"
-                    :src="`${apiBase}${selected.source_preview_image_url ?? selected.preview_image_url}`"
+                    :src="`${fileBase}${selected.source_preview_image_url ?? selected.preview_image_url}`"
                     alt="source invoice preview"
                     class="max-h-[60vh] w-full cursor-pointer object-contain transition-transform hover:scale-[1.02]"
-                    @click="openImagePreview(`${apiBase}${selected.source_preview_image_url ?? selected.preview_image_url}`, '源发票预览')"
+                    @click="openImagePreview(`${fileBase}${selected.source_preview_image_url ?? selected.preview_image_url}`, '源发票预览')"
                   />
                   <p v-else class="text-xs text-slate-500">暂无预览图</p>
                 </div>
@@ -301,10 +299,10 @@ onMounted(loadData);
                 <div class="rounded-xl bg-slate-50 p-3">
                   <img
                     v-if="selected.archive_preview_image_url || selected.preview_image_url"
-                    :src="`${apiBase}${selected.archive_preview_image_url ?? selected.preview_image_url}`"
+                    :src="`${fileBase}${selected.archive_preview_image_url ?? selected.preview_image_url}`"
                     alt="archived invoice preview"
                     class="max-h-[60vh] w-full cursor-pointer object-contain transition-transform hover:scale-[1.02]"
-                    @click="openImagePreview(`${apiBase}${selected.archive_preview_image_url ?? selected.preview_image_url}`, '归档发票预览')"
+                    @click="openImagePreview(`${fileBase}${selected.archive_preview_image_url ?? selected.preview_image_url}`, '归档发票预览')"
                   />
                   <p v-else class="text-xs text-slate-500">暂无预览图</p>
                 </div>

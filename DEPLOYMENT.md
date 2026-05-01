@@ -1,5 +1,97 @@
 # 企业自动化发票报销系统 - 部署指南
 
+## 部署方式
+
+本项目支持两种部署方式：
+
+| 方式 | 适用场景 | 复杂度 |
+|------|----------|--------|
+| **Docker 部署** | 快速部署、环境隔离、生产环境 | ⭐ 简单 |
+| **本地部署** | 开发调试、自定义配置 | ⭐⭐ 中等 |
+
+---
+
+## 一、Docker 部署（推荐）
+
+### 前置要求
+
+| 依赖 | 版本 |
+|------|------|
+| Docker | 20.10+ |
+| Docker Compose | v2.0+ |
+
+### 快速开始
+
+```bash
+# 1. 克隆项目
+git clone <repository-url> /opt/invoice-system
+cd /opt/invoice-system
+
+# 2. 配置环境变量
+cp backend/.env.example backend/.env
+vim backend/.env   # 填入 LLM_API_KEY
+
+# 3. 一键启动
+docker compose up -d
+
+# 4. 验证
+curl http://localhost/health
+```
+
+### 架构说明
+
+```
+用户 → nginx:80 → 静态文件（Vue SPA）
+                 → /api, /files 代理到 backend:8000
+```
+
+- **nginx 容器**：前端静态文件 + 反向代理，端口 80
+- **backend 容器**：FastAPI 后端，端口 8000（不对外暴露）
+
+### 数据持久化
+
+所有数据存储在 `./data/` 目录：
+
+| 路径 | 说明 |
+|------|------|
+| `./data/invoice.db` | SQLite 数据库 |
+| `./data/source_files/` | 原始 PDF 文件 |
+| `./data/archives/` | 归档发票文件 |
+| `./data/previews/` | 预览图 |
+| `./data/meta/` | 元信息 JSON |
+
+### 常用命令
+
+```bash
+# 查看日志
+docker compose logs -f backend
+docker compose logs -f nginx
+
+# 重启服务
+docker compose restart
+
+# 重新构建
+docker compose up -d --build
+
+# 停止并清理
+docker compose down
+```
+
+### 备份与迁移
+
+```bash
+# 备份
+cp -r ./data ./backup/data-$(date +%Y%m%d)
+
+# 迁移
+# 1. 复制项目文件和 data 目录到新机器
+# 2. 执行 docker compose up -d
+```
+
+---
+
+## 二、本地部署
+
 ## 前置要求
 
 | 依赖 | 版本 |

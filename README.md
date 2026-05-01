@@ -35,21 +35,36 @@
 
 ## 🚀 快速开始
 
-### 环境要求
+### 方式一：Docker 部署（推荐）
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/user/invoice-system.git
+cd invoice-system
+
+# 2. 配置环境变量
+cp backend/.env.example backend/.env
+vim backend/.env   # 填入你的 LLM API Key
+
+# 3. 一键启动
+docker compose up -d
+
+# 4. 访问
+# 前端界面：http://localhost
+# 后端 API：http://localhost/api
+# API 文档：http://localhost/docs
+```
+
+### 方式二：本地开发
+
+#### 环境要求
 
 | 依赖 | 版本 |
 |------|------|
 | Python | 3.11+ |
 | Node.js | 20+ |
 
-### 1. 克隆仓库
-
-```bash
-git clone https://github.com/user/invoice-system.git
-cd invoice-system
-```
-
-### 2. 启动后端
+#### 1. 启动后端
 
 ```bash
 cd backend
@@ -69,7 +84,7 @@ cp .env.example .env
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 3. 启动前端
+#### 2. 启动前端
 
 ```bash
 cd frontend
@@ -81,7 +96,7 @@ npm install
 npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
-### 4. 访问应用
+#### 3. 访问应用
 
 | 服务 | 地址 |
 |------|------|

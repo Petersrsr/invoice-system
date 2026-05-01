@@ -37,6 +37,9 @@ archives/
 previews/
 meta/
 
+# Docker data
+data/
+
 # ------------------------------
 # Frontend
 # ------------------------------
